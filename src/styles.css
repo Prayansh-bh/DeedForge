@@ -1,0 +1,111 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+:root {
+  /* Day mode: legal editorial palette — ink, brass, ivory and mineral blue */
+  --radius: 0.5rem;
+  --background: oklch(0.965 0.018 92);
+  --foreground: oklch(0.185 0.018 248);
+  --card: oklch(0.99 0.01 95);
+  --card-foreground: oklch(0.185 0.018 248);
+  --popover: oklch(0.99 0.01 95);
+  --popover-foreground: oklch(0.185 0.018 248);
+  --primary: oklch(0.245 0.035 248);
+  --primary-foreground: oklch(0.955 0.08 94);
+  --secondary: oklch(0.905 0.035 205);
+  --secondary-foreground: oklch(0.22 0.035 230);
+  --muted: oklch(0.925 0.02 88);
+  --muted-foreground: oklch(0.43 0.025 245);
+  --accent: oklch(0.82 0.13 86);
+  --accent-foreground: oklch(0.18 0.018 248);
+  --destructive: oklch(0.48 0.13 31);
+  --destructive-foreground: oklch(0.98 0.01 95);
+  --border: oklch(0.81 0.028 86);
+  --input: oklch(0.84 0.025 88);
+  --ring: oklch(0.57 0.095 225);
+}
+
+.dark {
+  /* Night mode: obsidian, antique gold and restrained teal */
+  --background: oklch(0.135 0.014 250);
+  --foreground: oklch(0.925 0.035 90);
+  --card: oklch(0.18 0.018 248);
+  --card-foreground: oklch(0.925 0.035 90);
+  --popover: oklch(0.19 0.018 248);
+  --popover-foreground: oklch(0.925 0.035 90);
+  --primary: oklch(0.8 0.12 86);
+  --primary-foreground: oklch(0.135 0.014 250);
+  --secondary: oklch(0.255 0.035 205);
+  --secondary-foreground: oklch(0.925 0.035 90);
+  --muted: oklch(0.235 0.018 248);
+  --muted-foreground: oklch(0.735 0.04 92);
+  --accent: oklch(0.34 0.055 198);
+  --accent-foreground: oklch(0.94 0.04 90);
+  --destructive: oklch(0.63 0.15 31);
+  --destructive-foreground: oklch(0.135 0.014 250);
+  --border: oklch(0.3 0.026 238);
+  --input: oklch(0.31 0.026 238);
+  --ring: oklch(0.8 0.12 86);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    font-family: var(--font-sans);
+  }
+
+  body {
+    background-color: var(--color-background);
+    background-image:
+      linear-gradient(135deg, color-mix(in oklab, var(--color-secondary) 38%, transparent), transparent 42%),
+      linear-gradient(180deg, color-mix(in oklab, var(--color-accent) 12%, transparent), transparent 30%);
+    color: var(--color-foreground);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-serif);
+    letter-spacing: 0;
+  }
+}
+
+@utility container-x {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+}
