@@ -1,7 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ChevronRight, FileCheck2, FileText, Scale, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { registeredDeeds, unregisteredDeeds } from "@/lib/deed-data";
+import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -74,6 +75,16 @@ function HomePage() {
 }
 
 function Hero() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleStartDrafting = (e: React.MouseEvent) => {
+    if (!user) {
+      e.preventDefault();
+      navigate({ to: "/auth", search: { redirect: "/#pick-document", tab: "login" } });
+    }
+  };
+
   return (
     <section className="border-b border-border">
       <div className="container-x grid gap-10 py-20 md:grid-cols-2 md:py-28">
@@ -91,6 +102,7 @@ function Hero() {
           <div className="mt-8 flex flex-wrap gap-3">
             <a
               href="#pick-document"
+              onClick={handleStartDrafting}
               className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5"
             >
               Start drafting <ChevronRight className="h-4 w-4" />
@@ -206,6 +218,16 @@ function PickerCard({
   onLeave: () => void;
   icon: React.ReactNode;
 }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleDeedClick = (e: React.MouseEvent, slug: string) => {
+    if (!user) {
+      e.preventDefault();
+      navigate({ to: "/auth", search: { redirect: `/deed/${slug}`, tab: "login" } });
+    }
+  };
+
   return (
     <div
       onMouseEnter={onEnter}
@@ -228,6 +250,7 @@ function PickerCard({
             key={d.slug}
             to="/deed/$slug"
             params={{ slug: d.slug }}
+            onClick={(e) => handleDeedClick(e, d.slug)}
             className="flex items-center justify-between rounded-md border border-border bg-background px-4 py-3 text-sm font-medium transition-transform hover:-translate-y-0.5 hover:bg-foreground hover:text-background"
           >
             <span>{d.name}</span>

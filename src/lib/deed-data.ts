@@ -23,8 +23,6 @@ const commonParties: DeedField[] = [
   { key: "secondPartyName", label: "Second Party Full Name", type: "text", placeholder: "e.g. Priya Verma" },
   { key: "secondPartyAddress", label: "Second Party Address", type: "textarea" },
   { key: "secondPartyIdNumber", label: "Second Party ID (Aadhaar/PAN)", type: "text" },
-  { key: "executionDate", label: "Date of Execution", type: "date" },
-  { key: "executionPlace", label: "Place of Execution", type: "text", placeholder: "e.g. New Delhi" },
 ];
 
 export const deedTypes: DeedType[] = [
@@ -39,7 +37,7 @@ export const deedTypes: DeedType[] = [
       { key: "saleConsideration", label: "Sale Consideration (INR)", type: "number" },
       { key: "paymentMode", label: "Mode of Payment", type: "text", placeholder: "e.g. RTGS / Cheque No." },
     ],
-    template: `THIS SALE DEED is executed on {executionDate} at {executionPlace}
+    template: `THIS SALE DEED
 
 BETWEEN
 {firstPartyName}, residing at {firstPartyAddress}, holding ID {firstPartyIdNumber} (hereinafter called the "SELLER")
@@ -69,7 +67,7 @@ _______________________              _______________________
       { key: "relationship", label: "Relationship between parties", type: "text", placeholder: "e.g. Father and Son" },
       { key: "propertyDescription", label: "Property/Asset Description", type: "textarea" },
     ],
-    template: `THIS GIFT DEED is made on {executionDate} at {executionPlace}
+    template: `THIS GIFT DEED
 
 BETWEEN
 {firstPartyName} (DONOR), residing at {firstPartyAddress}, ID {firstPartyIdNumber}
@@ -99,7 +97,7 @@ _______________________              _______________________
       { key: "monthlyRent", label: "Monthly Rent (INR)", type: "number" },
       { key: "securityDeposit", label: "Security Deposit (INR)", type: "number" },
     ],
-    template: `THIS LEASE DEED is executed on {executionDate} at {executionPlace}
+    template: `THIS LEASE DEED
 
 BETWEEN
 {firstPartyName} (LESSOR), residing at {firstPartyAddress}, ID {firstPartyIdNumber}
@@ -109,7 +107,7 @@ AND
 
 PREMISES: {propertyDescription}
 
-TERM: {leaseTerm} years from {executionDate}
+TERM: {leaseTerm} years
 RENT: INR {monthlyRent}/- per month
 DEPOSIT: INR {securityDeposit}/- refundable
 
@@ -130,7 +128,7 @@ _______________________              _______________________
       { key: "interestRate", label: "Interest Rate (% p.a.)", type: "number" },
       { key: "tenure", label: "Loan Tenure (Months)", type: "number" },
     ],
-    template: `THIS MORTGAGE DEED is executed on {executionDate} at {executionPlace}
+    template: `THIS MORTGAGE DEED
 
 BETWEEN
 {firstPartyName} (MORTGAGOR), residing at {firstPartyAddress}, ID {firstPartyIdNumber}
@@ -159,7 +157,7 @@ _______________________              _______________________
       { key: "firstPartyShare", label: "First Party's Share", type: "text", placeholder: "e.g. Northern half measuring 1200 sq ft" },
       { key: "secondPartyShare", label: "Second Party's Share", type: "text" },
     ],
-    template: `THIS PARTITION DEED is executed on {executionDate} at {executionPlace}
+    template: `THIS PARTITION DEED
 
 BETWEEN the co-owners:
 1) {firstPartyName}, {firstPartyAddress}, ID {firstPartyIdNumber}
@@ -187,7 +185,7 @@ _______________________              _______________________
       { key: "propertyDescription", label: "Property/Claim Being Settled", type: "textarea" },
       { key: "settlementTerms", label: "Settlement Terms", type: "textarea" },
     ],
-    template: `THIS SETTLEMENT DEED is executed on {executionDate} at {executionPlace}
+    template: `THIS SETTLEMENT DEED
 
 BETWEEN
 {firstPartyName} (SETTLOR), {firstPartyAddress}, ID {firstPartyIdNumber}
@@ -214,7 +212,7 @@ _______________________              _______________________
       { key: "powers", label: "Powers Granted", type: "textarea", placeholder: "List of acts the attorney can perform" },
       { key: "validity", label: "Validity Period", type: "text", placeholder: "e.g. 2 years or until revoked" },
     ],
-    template: `THIS POWER OF ATTORNEY is executed on {executionDate} at {executionPlace}
+    template: `THIS POWER OF ATTORNEY
 
 I, {firstPartyName}, residing at {firstPartyAddress}, ID {firstPartyIdNumber} (hereinafter "PRINCIPAL")
 
