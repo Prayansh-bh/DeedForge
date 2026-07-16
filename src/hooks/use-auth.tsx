@@ -36,6 +36,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
         }
         setLoading(false);
+      }).catch((err) => {
+        console.error("Supabase getSession error:", err);
+        setLoading(false);
       });
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {

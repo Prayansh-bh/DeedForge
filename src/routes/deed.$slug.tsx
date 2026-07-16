@@ -14,12 +14,13 @@ const APARTMENT_FLAT_DEED = getDeedBySlug("sale-deed-apartment-flat");
 
 export const Route = createFileRoute("/deed/$slug")({
   loader: ({ params }) => {
-    const deed = getDeedBySlug(params.slug);
-    if (!deed) throw notFound();
-    return { deed };
+    // Normalize slug (replace url-encoded spaces or spaces with hyphens, lowercase)
+    const normalizedSlug = decodeURIComponent(params.slug).trim().replace(/\s+/g, '-').toLowerCase();
+    const deed = getDeedBySlug(normalizedSlug) || getDeedBySlug(params.slug);
+    return { deed: deed || null };
   },
   head: ({ loaderData }) => {
-    if (!loaderData) {
+    if (!loaderData || !loaderData.deed) {
       return { meta: [{ title: "Deed not found — DeedForge" }, { name: "robots", content: "noindex" }] };
     }
     const { deed } = loaderData;
@@ -177,6 +178,7 @@ function DeedPage() {
   // Determine which deed data to actually use for fields/uploads/template/preview
   // On the Sale Deed route, swap to the Apartment/Flat deed when that sub-type is active
   const effectiveDeed: DeedType = useMemo(() => {
+    if (!deed) return {} as any;
     if (
       deed.slug === "sale-deed" &&
       propertyType === "Residential" &&
@@ -197,18 +199,18 @@ function DeedPage() {
   }, [deed, propertyType, propertySubType]);
 
   // Build upload state from the effective deed's documentUploads (resets when effectiveDeed changes)
-  const buildUploadState = (d: DeedType) => {
-    if (d.documentUploads && d.documentUploads.length > 0) {
-      return d.documentUploads.reduce<Record<string, { fileName: string | null; status: "idle" | "uploading" | "ocr" | "parsing" | "completed"; progress: number }>>((acc, doc) => {
-        acc[doc.id] = { fileName: null, status: "idle", progress: 0 };
-        return acc;
-      }, {});
+  const buildUploadState = (d: DeedType | null) => {
+    if (!d || !d.documentUploads) {
+      return {
+        firstParty: { fileName: null, status: "idle" as const, progress: 0 },
+        secondParty: { fileName: null, status: "idle" as const, progress: 0 },
+        payment: { fileName: null, status: "idle" as const, progress: 0 },
+      };
     }
-    return {
-      firstParty: { fileName: null, status: "idle" as const, progress: 0 },
-      secondParty: { fileName: null, status: "idle" as const, progress: 0 },
-      payment: { fileName: null, status: "idle" as const, progress: 0 },
-    };
+    return d.documentUploads.reduce<Record<string, { fileName: string | null; status: "idle" | "uploading" | "ocr" | "parsing" | "completed"; progress: number }>>((acc, doc) => {
+      acc[doc.id] = { fileName: null, status: "idle", progress: 0 };
+      return acc;
+    }, {});
   };
 
   const [uploadState, setUploadState] = useState<Record<string, {
@@ -218,9 +220,9 @@ function DeedPage() {
   }>>(buildUploadState(deed));
 
   // Reset form data and upload state whenever the effective deed switches
-  const prevEffectiveSlug = useRef(effectiveDeed.slug);
+  const prevEffectiveSlug = useRef(effectiveDeed?.slug);
   useEffect(() => {
-    if (effectiveDeed.slug !== prevEffectiveSlug.current) {
+    if (effectiveDeed && effectiveDeed.slug !== prevEffectiveSlug.current) {
       prevEffectiveSlug.current = effectiveDeed.slug;
       setData({});
       setUploadState(buildUploadState(effectiveDeed));
@@ -228,25 +230,29 @@ function DeedPage() {
     }
   }, [effectiveDeed]);
 
-  const isLocked = deed.category === "registered" && (!propertyType || !propertySubType);
+  const isLocked = effectiveDeed?.category === "registered" && (!propertyType || !propertySubType);
 
-  const showPaymentUpload = deed.category === "registered" && !effectiveDeed.documentUploads && effectiveDeed.fields.some(
+  const showPaymentUpload = effectiveDeed?.category === "registered" && !effectiveDeed.documentUploads && effectiveDeed.fields?.some(
     (f) => f.key === "paymentMode" || f.key === "saleConsideration" || f.key === "monthlyRent" || f.key === "loanAmount"
   );
 
-  const rendered = useMemo(() => renderDeed(effectiveDeed.template, data), [effectiveDeed, data]);
+  const rendered = useMemo(() => {
+    if (!effectiveDeed || !effectiveDeed.template) return "";
+    return renderDeed(effectiveDeed.template, data);
+  }, [effectiveDeed, data]);
 
   const setField = (key: string, value: string) => setData((d) => ({ ...d, [key]: value }));
 
   // Redirect to auth if not logged in
   useEffect(() => {
+    if (!deed) return;
     if (!authLoading && !user) {
       navigate({
         to: "/auth",
         search: { redirect: `/deed/${deed.slug}`, tab: "login" },
       });
     }
-  }, [user, authLoading, navigate, deed.slug]);
+  }, [user, authLoading, navigate, deed]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -263,6 +269,16 @@ function DeedPage() {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!deed) {
+    return (
+      <div className="container-x py-24 text-center">
+        <h1 className="font-serif text-3xl font-bold">Deed not found</h1>
+        <p className="mt-3 text-muted-foreground">The document you requested doesn't exist.</p>
+        <Link to="/" className="mt-6 inline-block underline">Back to home</Link>
       </div>
     );
   }
