@@ -1,11 +1,16 @@
 import { createFileRoute, Link, notFound, useNavigate } from '@tanstack/react-router';
 import { useMemo, useState, useRef, useEffect } from "react";
-import { ArrowLeft, Copy, Download, FileText, Home, Building2, Sprout, Lock, Unlock, UploadCloud, Loader2, CheckCircle2, ChevronDown, FileType2 } from "lucide-react";
-import { getDeedBySlug, renderDeed, type DeedField } from "@/lib/deed-data";
+import { ArrowLeft, Copy, Download, FileText, Home, Building2, Sprout, Lock, Unlock, UploadCloud, Loader2, CheckCircle2, ChevronDown, FileType2, Info } from "lucide-react";
+import { getDeedBySlug, renderDeed, type DeedField, type DocumentUpload, type DeedType } from "@/lib/deed-data";
 import { useAuth } from "@/hooks/use-auth";
 import jsPDF from "jspdf";
+import * as htmlToImage from "html-to-image";
+import { toast } from "sonner";
 import { Document, Packer, Paragraph, TextRun } from "docx";
 import { saveAs } from "file-saver";
+
+// Pre-fetch the apartment/flat deed so we can switch to it in-place on the Sale Deed route
+const APARTMENT_FLAT_DEED = getDeedBySlug("sale-deed-apartment-flat");
 
 export const Route = createFileRoute("/deed/$slug")({
   loader: ({ params }) => {
@@ -44,8 +49,7 @@ export const Route = createFileRoute("/deed/$slug")({
 
 const PROPERTY_SUBTYPES: Record<string, string[]> = {
   Residential: [
-    "Apartment",
-    "Flat",
+    "Apartment/Flat",
     "Villa",
     "House",
     "Residential Plot",
@@ -78,6 +82,85 @@ const PROPERTY_SUBTYPES: Record<string, string[]> = {
   ],
 };
 
+// Simulated OCR data per document upload id
+const SIMULATED_OCR_DATA: Record<string, Record<string, string>> = {
+  vendorAadhaar: {
+    vendorName: "Rajesh Kumar Sharma",
+    vendorFatherName: "Ramesh Lal Sharma",
+    vendorAge: "47",
+    vendorAddress: "Flat No. 501, Green Valley Apartments, Sector 12, Bhopal – 462001, Madhya Pradesh",
+    vendorAadhaar: "9876 5432 1098",
+  },
+  vendorPAN: {
+    vendorPAN: "ABCRS1234F",
+  },
+  vendeeAadhaar: {
+    vendeeName: "Priya Verma",
+    vendeeFatherName: "Anil Kumar Verma",
+    vendeeAge: "35",
+    vendeeAddress: "H.No. 89, Phase 2, Arera Colony, Bhopal – 462016, Madhya Pradesh",
+    vendeeAadhaar: "1234 5678 9012",
+  },
+  vendeePAN: {
+    vendeePAN: "FGHPV5678K",
+  },
+  motherDeed: {
+    societyName: "Sunshine Residency",
+    sroOfficeName: "Sub-Registrar Office, Bhopal City",
+    prevRegDate: "2019-03-15",
+    prevDocNumber: "1245/2019",
+    prevJildNumber: "5",
+  },
+  khasra: {
+    khasraNumber: "123/1",
+    halkaNumber: "45",
+    gramName: "Bhopal City",
+    districtName: "Bhopal, Madhya Pradesh",
+  },
+  allotmentLetter: {
+    flatNumber: "402",
+    floorNumber: "4th",
+    blockName: "Tower A",
+    superBuiltUpArea: "1250 sq ft",
+    carpetArea: "980 sq ft",
+    parkingNumber: "B-14",
+  },
+  layoutPlan: {
+    boundaryNorth: "Flat No. 401",
+    boundarySouth: "Open Terrace",
+    boundaryEast: "Corridor / Lift Lobby",
+    boundaryWest: "External Wall of Building",
+  },
+  bankPayment: {
+    saleAmountFigures: "5500000",
+    saleAmountWords: "Fifty-Five Lakhs Rupees Only",
+    paymentDetails: "NEFT UTR No. UTIB00012458921 dated 15-07-2026, Bank: SBI Bhopal Main Branch",
+  },
+  // legacy sections for non-apartment deeds
+  firstParty: {
+    firstPartyName: "Rajesh Kumar Sharma",
+    firstPartyAddress: "Flat No. 402, Sunshine Apartments, Sector 15, Dwarka, New Delhi - 110075",
+    firstPartyIdNumber: "AADHAAR: 9876 5432 1098",
+    firstPartyShare: "Residential plot measuring 1500 sq ft",
+  },
+  secondParty: {
+    secondPartyName: "Priya Verma",
+    secondPartyAddress: "H.No. 89, Phase 2, DLF Cyber City, Sector 24, Gurugram, Haryana - 122002",
+    secondPartyIdNumber: "AADHAAR: 1234 5678 9012",
+    secondPartyShare: "Commercial space measuring 1000 sq ft",
+  },
+  payment: {
+    paymentMode: "Net Banking Ref: UTIB00012458921",
+    saleConsideration: "5500000",
+    monthlyRent: "25000",
+    securityDeposit: "50000",
+    loanAmount: "3500000",
+    interestRate: "8.5",
+    tenure: "180",
+    tenureMonths: "11",
+  },
+};
+
 function DeedPage() {
   const { deed } = Route.useLoaderData();
   const { user, loading: authLoading } = useAuth();
@@ -88,7 +171,64 @@ function DeedPage() {
   const [propertySubType, setPropertySubType] = useState<string | null>(null);
   const [showDownloadMenu, setShowDownloadMenu] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
   const [highlightedFields, setHighlightedFields] = useState<Set<string>>(new Set());
+
+  // Determine which deed data to actually use for fields/uploads/template/preview
+  // On the Sale Deed route, swap to the Apartment/Flat deed when that sub-type is active
+  const effectiveDeed: DeedType = useMemo(() => {
+    if (
+      deed.slug === "sale-deed" &&
+      propertyType === "Residential" &&
+      propertySubType === "Apartment/Flat" &&
+      APARTMENT_FLAT_DEED
+    ) {
+      return APARTMENT_FLAT_DEED;
+    }
+    return deed;
+  }, [deed, propertyType, propertySubType]);
+
+  // Build upload state from the effective deed's documentUploads (resets when effectiveDeed changes)
+  const buildUploadState = (d: DeedType) => {
+    if (d.documentUploads && d.documentUploads.length > 0) {
+      return d.documentUploads.reduce<Record<string, { fileName: string | null; status: "idle" | "uploading" | "ocr" | "parsing" | "completed"; progress: number }>>((acc, doc) => {
+        acc[doc.id] = { fileName: null, status: "idle", progress: 0 };
+        return acc;
+      }, {});
+    }
+    return {
+      firstParty: { fileName: null, status: "idle" as const, progress: 0 },
+      secondParty: { fileName: null, status: "idle" as const, progress: 0 },
+      payment: { fileName: null, status: "idle" as const, progress: 0 },
+    };
+  };
+
+  const [uploadState, setUploadState] = useState<Record<string, {
+    fileName: string | null;
+    status: "idle" | "uploading" | "ocr" | "parsing" | "completed";
+    progress: number;
+  }>>(buildUploadState(deed));
+
+  // Reset form data and upload state whenever the effective deed switches
+  const prevEffectiveSlug = useRef(effectiveDeed.slug);
+  useEffect(() => {
+    if (effectiveDeed.slug !== prevEffectiveSlug.current) {
+      prevEffectiveSlug.current = effectiveDeed.slug;
+      setData({});
+      setUploadState(buildUploadState(effectiveDeed));
+      setHighlightedFields(new Set());
+    }
+  }, [effectiveDeed]);
+
+  const isLocked = deed.category === "registered" && (!propertyType || !propertySubType);
+
+  const showPaymentUpload = deed.category === "registered" && !effectiveDeed.documentUploads && effectiveDeed.fields.some(
+    (f) => f.key === "paymentMode" || f.key === "saleConsideration" || f.key === "monthlyRent" || f.key === "loanAmount"
+  );
+
+  const rendered = useMemo(() => renderDeed(effectiveDeed.template, data), [effectiveDeed, data]);
+
+  const setField = (key: string, value: string) => setData((d) => ({ ...d, [key]: value }));
 
   // Redirect to auth if not logged in
   useEffect(() => {
@@ -99,36 +239,6 @@ function DeedPage() {
       });
     }
   }, [user, authLoading, navigate, deed.slug]);
-
-  if (authLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!user) return null;
-
-  const [uploadState, setUploadState] = useState<Record<string, {
-    fileName: string | null;
-    status: "idle" | "uploading" | "ocr" | "parsing" | "completed";
-    progress: number;
-  }>>({
-    firstParty: { fileName: null, status: "idle", progress: 0 },
-    secondParty: { fileName: null, status: "idle", progress: 0 },
-    payment: { fileName: null, status: "idle", progress: 0 },
-  });
-
-  const isLocked = deed.category === "registered" && (!propertyType || !propertySubType);
-
-  const showPaymentUpload = deed.category === "registered" && deed.fields.some(
-    (f) => f.key === "paymentMode" || f.key === "saleConsideration" || f.key === "monthlyRent" || f.key === "loanAmount"
-  );
-
-  const rendered = useMemo(() => renderDeed(deed.template, data), [deed, data]);
-
-  const setField = (key: string, value: string) => setData((d) => ({ ...d, [key]: value }));
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -141,42 +251,117 @@ function DeedPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const downloadPDF = () => {
-    setShowDownloadMenu(false);
-    const doc = new jsPDF({ unit: "mm", format: "a4" });
-    const pageW = doc.internal.pageSize.getWidth();
-    const margin = 20;
-    const maxW = pageW - margin * 2;
-    const lineHeight = 6;
-    let y = margin;
+  if (authLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
-    doc.setFont("times", "normal");
-    doc.setFontSize(11);
+  if (!user) return null;
 
-    const lines = rendered.split("\n");
-    lines.forEach((line) => {
-      const wrapped = doc.splitTextToSize(line === "" ? " " : line, maxW);
-      wrapped.forEach((wLine: string) => {
-        if (y > doc.internal.pageSize.getHeight() - margin) {
-          doc.addPage();
-          y = margin;
+  const downloadPDF = async () => {
+    try {
+      setShowDownloadMenu(false);
+      
+      if (isApartmentFlatDeed && previewRef.current) {
+        toast.info("Generating PDF...", {
+          description: "This may take a few seconds.",
+          duration: 3000,
+        });
+
+        const imgData = await htmlToImage.toJpeg(previewRef.current, {
+          quality: 0.9,
+          backgroundColor: '#ffffff',
+          pixelRatio: 2 // High-res scaling
+        });
+
+        // We can get width and height from the image data
+        const img = new Image();
+        img.src = imgData;
+        await new Promise((resolve) => {
+          img.onload = resolve;
+        });
+
+        const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const margin = 10;
+        const usableW = pageW - margin * 2;
+        const imgW = img.width;
+        const imgH = img.height;
+        const ratio = usableW / imgW;
+        const scaledH = imgH * ratio;
+
+        const pageImgH = pageH - margin * 2;
+        let renderedH = 0;
+        while (renderedH < scaledH) {
+          if (renderedH > 0) pdf.addPage();
+          pdf.addImage(imgData, "JPEG", margin, margin - renderedH, usableW, scaledH, undefined, "FAST");
+          renderedH += pageImgH;
         }
-        doc.text(wLine, margin, y);
-        y += lineHeight;
-      });
-    });
 
-    doc.save(`${deed.slug}.pdf`);
+        pdf.save(`${effectiveDeed.slug}.pdf`);
+        return;
+      }
+
+      // Fallback text-based PDF for generic deeds
+      const doc = new jsPDF({ unit: "mm", format: "a4" });
+      const pageW = doc.internal.pageSize.getWidth();
+      const margin = 20;
+      const maxW = pageW - margin * 2;
+      const lineHeight = 6;
+      let y = margin;
+      doc.setFont("times", "normal");
+      doc.setFontSize(11);
+      const lines = rendered.split("\n");
+      lines.forEach((line) => {
+        const wrapped = doc.splitTextToSize(line === "" ? " " : line, maxW);
+        wrapped.forEach((wLine: string) => {
+          if (y > doc.internal.pageSize.getHeight() - margin) {
+            doc.addPage();
+            y = margin;
+          }
+          doc.text(wLine, margin, y);
+          y += lineHeight;
+        });
+      });
+      doc.save(`${effectiveDeed.slug}.pdf`);
+
+    } catch (err: any) {
+      console.error("PDF generation failed:", err);
+      toast.error("PDF generation failed", {
+        description: err.message || String(err),
+      });
+    }
   };
 
   const downloadDocx = async () => {
     setShowDownloadMenu(false);
+
+    if (isApartmentFlatDeed && previewRef.current) {
+      // Export as HTML .doc (Word opens this natively, perfectly preserving tables, colors, and Hindi fonts!)
+      const htmlContent = `
+        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+        <head><meta charset='utf-8'><title>${effectiveDeed.name}</title></head>
+        <body style="font-family: Arial, sans-serif;">
+          ${previewRef.current.innerHTML}
+        </body>
+        </html>
+      `;
+      const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
+      saveAs(blob, `${effectiveDeed.slug}.doc`);
+      return;
+    }
+
+    // Generic text-based docx export for other deeds
     const paragraphs = rendered.split("\n").map((line) =>
       new Paragraph({
         children: [
           new TextRun({
             text: line,
-            font: "Times New Roman",
+            font: "Arial",
             size: 22,
           }),
         ],
@@ -185,16 +370,11 @@ function DeedPage() {
     );
 
     const doc = new Document({
-      sections: [
-        {
-          properties: {},
-          children: paragraphs,
-        },
-      ],
+      sections: [{ properties: {}, children: paragraphs }],
     });
 
     const blob = await Packer.toBlob(doc);
-    saveAs(blob, `${deed.slug}.docx`);
+    saveAs(blob, `${effectiveDeed.slug}.docx`);
   };
 
   const copy = async () => {
@@ -203,96 +383,49 @@ function DeedPage() {
     setTimeout(() => setCopied(false), 1600);
   };
 
-  const handleSimulatedUpload = (section: "firstParty" | "secondParty" | "payment", file: File) => {
-    // Start simulation
+  const handleSimulatedUpload = (sectionId: string, file: File) => {
     setUploadState(prev => ({
       ...prev,
-      [section]: { fileName: file.name, status: "uploading", progress: 20 }
+      [sectionId]: { fileName: file.name, status: "uploading", progress: 20 }
     }));
 
-    // Step 1: Uploading (20% -> 60%)
     setTimeout(() => {
       setUploadState(prev => ({
         ...prev,
-        [section]: { ...prev[section], status: "ocr", progress: 60 }
+        [sectionId]: { ...prev[sectionId], status: "ocr", progress: 60 }
       }));
 
-      // Step 2: OCR Analysis (60% -> 90%)
       setTimeout(() => {
         setUploadState(prev => ({
           ...prev,
-          [section]: { ...prev[section], status: "parsing", progress: 90 }
+          [sectionId]: { ...prev[sectionId], status: "parsing", progress: 90 }
         }));
 
-        // Step 3: Parse and Fill (90% -> 100%)
         setTimeout(() => {
           setUploadState(prev => ({
             ...prev,
-            [section]: { ...prev[section], status: "completed", progress: 100 }
+            [sectionId]: { ...prev[sectionId], status: "completed", progress: 100 }
           }));
 
+          const ocrData = SIMULATED_OCR_DATA[sectionId] || {};
           const newFills: Record<string, string> = {};
           const keysToHighlight: string[] = [];
 
-          if (section === "firstParty") {
-            const mapping = {
-              firstPartyName: "Rajesh Kumar Sharma",
-              firstPartyAddress: "Flat No. 402, Sunshine Apartments, Sector 15, Dwarka, New Delhi - 110075",
-              firstPartyIdNumber: "AADHAAR: 9876 5432 1098",
-              firstPartyShare: "Residential plot measuring 1500 sq ft"
-            };
-            Object.entries(mapping).forEach(([key, val]) => {
-              if (deed.fields.some(f => f.key === key)) {
-                newFills[key] = val;
-                keysToHighlight.push(key);
-              }
-            });
-          } else if (section === "secondParty") {
-            const mapping = {
-              secondPartyName: "Priya Verma",
-              secondPartyAddress: "H.No. 89, Phase 2, DLF Cyber City, Sector 24, Gurugram, Haryana - 122002",
-              secondPartyIdNumber: "AADHAAR: 1234 5678 9012",
-              secondPartyShare: "Commercial space measuring 1000 sq ft"
-            };
-            Object.entries(mapping).forEach(([key, val]) => {
-              if (deed.fields.some(f => f.key === key)) {
-                newFills[key] = val;
-                keysToHighlight.push(key);
-              }
-            });
-          } else if (section === "payment") {
-            const mapping = {
-              paymentMode: "Net Banking Ref: UTIB00012458921",
-              saleConsideration: "5500000",
-              monthlyRent: "25000",
-              securityDeposit: "50000",
-              loanAmount: "3500000",
-              interestRate: "8.5",
-              tenure: "180",
-              tenureMonths: "11"
-            };
-            Object.entries(mapping).forEach(([key, val]) => {
-              if (deed.fields.some(f => f.key === key)) {
-                newFills[key] = val;
-                keysToHighlight.push(key);
-              }
-            });
-          }
+          Object.entries(ocrData).forEach(([key, val]) => {
+            if (effectiveDeed.fields.some(f => f.key === key)) {
+              newFills[key] = val;
+              keysToHighlight.push(key);
+            }
+          });
 
-          // Update main form data
-          setData(prevData => ({
-            ...prevData,
-            ...newFills
-          }));
+          setData(prevData => ({ ...prevData, ...newFills }));
 
-          // Highlight fields
           setHighlightedFields(prev => {
             const next = new Set(prev);
             keysToHighlight.forEach(k => next.add(k));
             return next;
           });
 
-          // Remove highlight after 2.5 seconds
           setTimeout(() => {
             setHighlightedFields(prev => {
               const next = new Set(prev);
@@ -306,15 +439,40 @@ function DeedPage() {
     }, 800);
   };
 
-  const handleClear = (section: "firstParty" | "secondParty" | "payment") => {
+  const handleClear = (sectionId: string) => {
     setUploadState(prev => ({
       ...prev,
-      [section]: { fileName: null, status: "idle", progress: 0 }
+      [sectionId]: { fileName: null, status: "idle", progress: 0 }
     }));
   };
 
+  const isApartmentFlatDeed = effectiveDeed.slug === "sale-deed-apartment-flat";
+
   return (
-    <div className="container-x py-10 md:py-14">
+    <div className="min-h-screen bg-muted/30 pb-20">
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          #printable-deed, #printable-deed * {
+            visibility: visible;
+          }
+          #printable-deed {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            padding: 0;
+            margin: 0;
+          }
+          @page {
+            margin: 15mm;
+          }
+        }
+      `}</style>
+      
+      <div className="container-x py-10 md:py-14">
       <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="h-3.5 w-3.5" /> Back
       </Link>
@@ -427,45 +585,109 @@ function DeedPage() {
                           </button>
                         );
                       })}
+
                     </div>
                   </div>
                 )}
               </div>
             )}
 
+            {/* Document Upload Section */}
             {deed.category === "registered" && (
               <div className="mb-6 bg-accent/10 p-4 rounded-lg border border-border">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-3">
-                  Auto-Fill details via Document Upload
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
+                  Auto-Fill via Document Upload
                 </span>
-                <div className={`grid gap-3 ${showPaymentUpload ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"}`}>
-                  <UploadZone
-                    label="First Party ID"
-                    id="firstParty"
-                    state={uploadState.firstParty}
-                    onUpload={handleSimulatedUpload}
-                    onClear={handleClear}
-                    disabled={isLocked}
-                  />
-                  <UploadZone
-                    label="Second Party ID"
-                    id="secondParty"
-                    state={uploadState.secondParty}
-                    onUpload={handleSimulatedUpload}
-                    onClear={handleClear}
-                    disabled={isLocked}
-                  />
-                  {showPaymentUpload && (
+                {isApartmentFlatDeed && (
+                  <p className="text-[11px] text-muted-foreground mb-3 flex items-start gap-1.5">
+                    <Info className="h-3 w-3 mt-0.5 shrink-0 text-primary" />
+                    Upload all 9 documents below to auto-fill 100% of the deed fields via OCR scanning.
+                  </p>
+                )}
+
+                {/* Apartment/Flat: 9-document grid */}
+                {isApartmentFlatDeed && effectiveDeed.documentUploads ? (
+                  <div className="space-y-3">
+                    {/* Vendor documents */}
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-primary mb-2">Vendor (विक्रेता)</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {effectiveDeed.documentUploads!.filter(d => d.id.startsWith("vendor")).map((doc) => (
+                          <DocUploadZone
+                            key={doc.id}
+                            doc={doc}
+                            state={uploadState[doc.id]}
+                            onUpload={handleSimulatedUpload}
+                            onClear={handleClear}
+                            disabled={isLocked}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    {/* Vendee documents */}
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-primary mb-2">Vendee (क्रेता)</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {effectiveDeed.documentUploads!.filter(d => d.id.startsWith("vendee")).map((doc) => (
+                          <DocUploadZone
+                            key={doc.id}
+                            doc={doc}
+                            state={uploadState[doc.id]}
+                            onUpload={handleSimulatedUpload}
+                            onClear={handleClear}
+                            disabled={isLocked}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    {/* Property documents */}
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-primary mb-2">Property & Payment Documents</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {effectiveDeed.documentUploads!.filter(d => !d.id.startsWith("vendor") && !d.id.startsWith("vendee")).map((doc) => (
+                          <DocUploadZone
+                            key={doc.id}
+                            doc={doc}
+                            state={uploadState[doc.id]}
+                            onUpload={handleSimulatedUpload}
+                            onClear={handleClear}
+                            disabled={isLocked}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Legacy 2-3 zone layout for other deeds */
+                  <div className={`grid gap-3 ${showPaymentUpload ? "grid-cols-1 md:grid-cols-3" : "grid-cols-1 md:grid-cols-2"}`}>
                     <UploadZone
-                      label="Payment Proof"
-                      id="payment"
-                      state={uploadState.payment}
+                      label="First Party ID"
+                      id="firstParty"
+                      state={uploadState.firstParty}
                       onUpload={handleSimulatedUpload}
                       onClear={handleClear}
                       disabled={isLocked}
                     />
-                  )}
-                </div>
+                    <UploadZone
+                      label="Second Party ID"
+                      id="secondParty"
+                      state={uploadState.secondParty}
+                      onUpload={handleSimulatedUpload}
+                      onClear={handleClear}
+                      disabled={isLocked}
+                    />
+                    {showPaymentUpload && (
+                      <UploadZone
+                        label="Payment Proof"
+                        id="payment"
+                        state={uploadState.payment}
+                        onUpload={handleSimulatedUpload}
+                        onClear={handleClear}
+                        disabled={isLocked}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -484,8 +706,11 @@ function DeedPage() {
                 </div>
               )}
               
-              <div className={`grid gap-4 transition-all duration-300 ${isLocked ? "opacity-30 pointer-events-none select-none" : "opacity-100"}`}>
-                {deed.fields.map((f: DeedField) => (
+              <div
+                key={effectiveDeed.slug}
+                className={`grid gap-4 transition-all duration-500 ${isLocked ? "opacity-30 pointer-events-none select-none" : "opacity-100"}`}
+              >
+                {effectiveDeed.fields.map((f: DeedField) => (
                   <FieldInput 
                     key={f.key} 
                     field={f} 
@@ -558,10 +783,17 @@ function DeedPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-            <pre className="whitespace-pre-wrap break-words font-serif text-[13.5px] leading-relaxed text-foreground/90">
-              {rendered}
-            </pre>
+          {/* Live Preview Area */}
+          <div ref={previewRef} id="printable-deed" className="print:bg-white">
+            {isApartmentFlatDeed ? (
+              <ApartmentDeedPreview data={data} />
+            ) : (
+              <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <pre className="whitespace-pre-wrap break-words font-serif text-[13.5px] leading-relaxed text-foreground/90">
+                  {rendered}
+                </pre>
+              </div>
+            )}
           </div>
 
           <p className="text-xs text-muted-foreground">
@@ -570,6 +802,291 @@ function DeedPage() {
           </p>
         </div>
       </div>
+    </div>
+    </div>
+  );
+}
+
+// ─── Apartment/Flat styled live preview ──────────────────────────────────────
+function ph(val: string | undefined, fallback: string) {
+  return val?.trim() ? val.trim() : fallback;
+}
+
+function ApartmentDeedPreview({ data }: { data: Record<string, string> }) {
+  const d = data;
+  const missing = (key: string) => !d[key]?.trim();
+
+  function Field({ k, label }: { k: string; label: string }) {
+    return missing(k) ? (
+      <span className="inline-block px-1.5 py-0.5 rounded text-[11px] font-semibold border" style={{ backgroundColor: '#fee2e2', color: '#dc2626', borderColor: '#fecaca' }}>
+        [{label}]
+      </span>
+    ) : (
+      <span className="font-semibold" style={{ color: '#1a1a1a' }}>{d[k]}</span>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border shadow-sm overflow-hidden" style={{ borderColor: '#e5e5e5', backgroundColor: '#ffffff' }}>
+      {/* Header */}
+      <div className="px-6 py-5 text-center" style={{ backgroundColor: '#800000' }}>
+        <h2 className="font-serif font-bold text-lg tracking-wide uppercase" style={{ color: '#ffffff' }}>
+          अचल संपत्ति विक्रय विलेख
+        </h2>
+        <p className="text-xs mt-1 font-medium" style={{ color: '#fecaca' }}>(SALE DEED — Apartment/Flat, Madhya Pradesh)</p>
+      </div>
+
+      <div className="p-6 space-y-6 font-serif text-[13px] leading-relaxed" style={{ color: '#1a1a1a' }}>
+
+        {/* Parties */}
+        <section>
+          <h3 className="text-[11px] font-bold uppercase tracking-widest border-b pb-1.5 mb-3" style={{ color: '#800000', borderColor: 'rgba(128, 0, 0, 0.2)' }}>
+            पक्षकारों का विवरण (Parties)
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Vendor */}
+            <div className="rounded-lg border p-3 space-y-1" style={{ borderColor: '#e5e5e5', backgroundColor: '#ffffff' }}>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#737373' }}>विक्रेता / Vendor (First Party)</p>
+              <p><span className="text-[11px]" style={{ color: '#737373' }}>नाम:</span> <Field k="vendorName" label="Vendor Name" /></p>
+              <p><span className="text-[11px]" style={{ color: '#737373' }}>पिता/पति:</span> <Field k="vendorFatherName" label="Father/Husband" /></p>
+              <p><span className="text-[11px]" style={{ color: '#737373' }}>आयु:</span> <Field k="vendorAge" label="Age" /> वर्ष</p>
+              <p><span className="text-[11px]" style={{ color: '#737373' }}>पता:</span> <Field k="vendorAddress" label="Address" /></p>
+              <p><span className="text-[11px]" style={{ color: '#737373' }}>PAN:</span> <Field k="vendorPAN" label="PAN" /></p>
+              <p><span className="text-[11px]" style={{ color: '#737373' }}>Aadhaar:</span> <Field k="vendorAadhaar" label="Aadhaar" /></p>
+            </div>
+            {/* Vendee */}
+            <div className="rounded-lg border p-3 space-y-1" style={{ borderColor: '#e5e5e5', backgroundColor: '#ffffff' }}>
+              <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#737373' }}>क्रेता / Vendee (Second Party)</p>
+              <p><span className="text-[11px]" style={{ color: '#737373' }}>नाम:</span> <Field k="vendeeName" label="Vendee Name" /></p>
+              <p><span className="text-[11px]" style={{ color: '#737373' }}>पिता/पति:</span> <Field k="vendeeFatherName" label="Father/Husband" /></p>
+              <p><span className="text-[11px]" style={{ color: '#737373' }}>आयु:</span> <Field k="vendeeAge" label="Age" /> वर्ष</p>
+              <p><span className="text-[11px]" style={{ color: '#737373' }}>पता:</span> <Field k="vendeeAddress" label="Address" /></p>
+              <p><span className="text-[11px]" style={{ color: '#737373' }}>PAN:</span> <Field k="vendeePAN" label="PAN" /></p>
+              <p><span className="text-[11px]" style={{ color: '#737373' }}>Aadhaar:</span> <Field k="vendeeAadhaar" label="Aadhaar" /></p>
+            </div>
+          </div>
+        </section>
+
+        {/* Recitals */}
+        <section>
+          <h3 className="text-[11px] font-bold uppercase tracking-widest border-b pb-1.5 mb-3" style={{ color: '#800000', borderColor: 'rgba(128, 0, 0, 0.2)' }}>
+            प्रस्तावना (Recitals)
+          </h3>
+          <p className="text-justify">
+            <strong>चूंकि (WHEREAS)</strong> विक्रेता <Field k="vendorName" label="Vendor Name" /> उस बहुमंजिला आवासीय परिसर <Field k="societyName" label="Society Name" /> के पूर्ण स्वामी हैं, खसरा नंबर <Field k="khasraNumber" label="Khasra No." />, हल्का नंबर <Field k="halkaNumber" label="Halka No." />, ग्राम/शहर <Field k="gramName" label="Village/Town" />, जिला <Field k="districtName" label="District" />, मध्य प्रदेश। उप-पंजीयक कार्यालय <Field k="sroOfficeName" label="SRO Office" /> में दस्तावेज़ क्रमांक <Field k="prevDocNumber" label="Doc No." />, जिल्द <Field k="prevJildNumber" label="Jild No." />, दिनांक <Field k="prevRegDate" label="Prev. Date" /> द्वारा क्रय किया गया था।
+          </p>
+          <p className="mt-2 text-justify">
+            <strong>तथा चूंकि</strong> फ्लैट नंबर <Field k="flatNumber" label="Flat No." />, फ्लोर <Field k="floorNumber" label="Floor" /> को रुपये <Field k="saleAmountFigures" label="Amount ₹" />/- (<Field k="saleAmountWords" label="Amount in Words" />) में क्रेता <Field k="vendeeName" label="Vendee Name" /> को हस्तांतरित किया जा रहा है।
+          </p>
+        </section>
+
+        {/* Consideration */}
+        <section>
+          <h3 className="text-[11px] font-bold uppercase tracking-widest border-b pb-1.5 mb-3" style={{ color: '#800000', borderColor: 'rgba(128, 0, 0, 0.2)' }}>
+            प्रतिफल (Consideration)
+          </h3>
+          <div className="border rounded-lg p-3" style={{ backgroundColor: '#fffbeb', borderColor: '#fde68a' }}>
+            <p>
+              <span className="text-[11px]" style={{ color: '#737373' }}>कुल राशि:</span>{" "}
+              <span className="font-bold" style={{ color: '#800000' }}>₹ <Field k="saleAmountFigures" label="Amount" />/-</span>
+            </p>
+            <p className="mt-0.5">
+              <span className="text-[11px]" style={{ color: '#737373' }}>शब्दों में:</span>{" "}
+              <Field k="saleAmountWords" label="Amount in Words" />
+            </p>
+            <p className="mt-0.5">
+              <span className="text-[11px]" style={{ color: '#737373' }}>भुगतान विवरण:</span>{" "}
+              <Field k="paymentDetails" label="Payment Details" />
+            </p>
+          </div>
+        </section>
+
+        {/* Property Schedule */}
+        <section>
+          <h3 className="text-[11px] font-bold uppercase tracking-widest border-b pb-1.5 mb-3" style={{ color: '#800000', borderColor: 'rgba(128, 0, 0, 0.2)' }}>
+            अनुसूची: संपत्ति का विवरण (Schedule of Property)
+          </h3>
+          <div className="rounded-lg border overflow-hidden" style={{ borderColor: '#e5e5e5', backgroundColor: '#ffffff' }}>
+            <table className="w-full text-[12px]">
+              <tbody>
+                {[
+                  ["फ्लैट/अपार्टमेंट नंबर", "flatNumber", "Flat No."],
+                  ["फ्लोर", "floorNumber", "Floor"],
+                  ["ब्लॉक/टावर", "blockName", "Block/Tower"],
+                  ["सुपर बिल्ट-अप एरिया", "superBuiltUpArea", "Super Built-up Area"],
+                  ["कारपेट एरिया", "carpetArea", "Carpet Area"],
+                  ["पार्किंग नंबर", "parkingNumber", "Parking No."],
+                ].map(([label, key, fb]) => (
+                  <tr key={key} className="border-b last:border-0" style={{ borderColor: '#e5e5e5' }}>
+                    <td className="px-3 py-2 font-medium w-1/2" style={{ color: '#737373' }}>{label}</td>
+                    <td className="px-3 py-2"><Field k={key} label={fb} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Boundaries */}
+          <div className="mt-3 rounded-lg border p-3" style={{ borderColor: '#e5e5e5', backgroundColor: '#ffffff' }}>
+            <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: '#737373' }}>चतुःसीमा (Boundaries)</p>
+            <div className="grid grid-cols-2 gap-2 text-[12px]">
+              {[
+                ["उत्तर (North)", "boundaryNorth"],
+                ["दक्षिण (South)", "boundarySouth"],
+                ["पूर्व (East)", "boundaryEast"],
+                ["पश्चिम (West)", "boundaryWest"],
+              ].map(([dir, key]) => (
+                <p key={key}>
+                  <span style={{ color: '#737373' }}>{dir}:</span>{" "}
+                  <Field k={key} label={dir} />
+                </p>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Covenants */}
+        <section>
+          <h3 className="text-[11px] font-bold uppercase tracking-widest border-b pb-1.5 mb-3" style={{ color: '#800000', borderColor: 'rgba(128, 0, 0, 0.2)' }}>
+            प्रमुख शर्तें (Key Covenants)
+          </h3>
+          <ol className="space-y-1.5 text-[12px] list-decimal list-inside" style={{ color: '#1a1a1a' }}>
+            <li><strong>स्वामित्व हस्तांतरण:</strong> इस विलेख के निष्पादन से विक्रेता क्रेता को सभी अधिकार हस्तांतरित करता है।</li>
+            <li><strong>आधिपत्य:</strong> वास्तविक, भौतिक एवं रिक्त आधिपत्य आज से क्रेता को सौंपा जा रहा है।</li>
+            <li><strong>भारमुक्ति:</strong> संपत्ति सभी ऋणों, बंधकों, वादों से पूर्णतः मुक्त है।</li>
+            <li><strong>कर देयता:</strong> आज की तिथि तक के सभी कर विक्रेता ने चुकाए हैं; आगे से क्रेता जिम्मेदार।</li>
+            <li><strong>नामांतरण:</strong> क्रेता संपत्ति का नामांतरण अपने नाम पर कराने हेतु स्वतंत्र है।</li>
+          </ol>
+        </section>
+
+        {/* Signatures */}
+        <section className="border-t pt-5" style={{ borderColor: '#e5e5e5' }}>
+          <h3 className="text-[11px] font-bold uppercase tracking-widest pb-1.5 mb-4" style={{ color: '#800000' }}>
+            हस्ताक्षर (Signatures)
+          </h3>
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <div className="h-10 border-b border-dashed mb-2" style={{ borderColor: '#a3a3a3' }} />
+              <p className="text-[11px] font-semibold">विक्रेता / Vendor</p>
+              <p className="text-[10px]" style={{ color: '#737373' }}>({ph(d.vendorName, "Vendor Name")})</p>
+            </div>
+            <div>
+              <div className="h-10 border-b border-dashed mb-2" style={{ borderColor: '#a3a3a3' }} />
+              <p className="text-[11px] font-semibold">क्रेता / Vendee</p>
+              <p className="text-[10px]" style={{ color: '#737373' }}>({ph(d.vendeeName, "Vendee Name")})</p>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-6 text-[11px]">
+            <div>
+              <p className="font-semibold mb-1" style={{ color: '#737373' }}>गवाह १ / Witness 1</p>
+              <div className="h-6 border-b border-dashed" style={{ borderColor: '#e5e5e5' }} />
+              <p className="text-[10px] mt-1" style={{ color: '#737373' }}>नाम / Name: ________________</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1" style={{ color: '#737373' }}>गवाह २ / Witness 2</p>
+              <div className="h-6 border-b border-dashed" style={{ borderColor: '#e5e5e5' }} />
+              <p className="text-[10px] mt-1" style={{ color: '#737373' }}>नाम / Name: ________________</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+// ─── DocUploadZone — for deed.documentUploads ─────────────────────────────────
+function DocUploadZone({
+  doc,
+  state,
+  onUpload,
+  onClear,
+  disabled,
+}: {
+  doc: DocumentUpload;
+  state: { fileName: string | null; status: string; progress: number } | undefined;
+  onUpload: (id: string, file: File) => void;
+  onClear: (id: string) => void;
+  disabled: boolean;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const safeState = state ?? { fileName: null, status: "idle", progress: 0 };
+
+  const getStatusText = () => {
+    switch (safeState.status) {
+      case "uploading": return "Uploading...";
+      case "ocr": return "Scanning text...";
+      case "parsing": return "Extracting...";
+      case "completed": return "Auto-filled!";
+      default: return "Upload";
+    }
+  };
+
+  return (
+    <div
+      className={`relative flex flex-col p-3 rounded-xl border-2 border-dashed transition-all duration-300 ${
+        disabled
+          ? "opacity-45 cursor-not-allowed select-none bg-accent/5 border-border"
+          : safeState.status === "idle"
+            ? "bg-background hover:bg-accent/40 hover:border-primary/50 cursor-pointer border-border"
+            : safeState.status === "completed"
+              ? "bg-emerald-500/5 border-emerald-500/40"
+              : "bg-accent/15 border-primary/30"
+      }`}
+      onClick={() => !disabled && safeState.status === "idle" && fileInputRef.current?.click()}
+    >
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={(e) => e.target.files?.[0] && onUpload(doc.id, e.target.files[0])}
+        accept="image/*,application/pdf"
+        className="hidden"
+        disabled={disabled}
+      />
+
+      {safeState.status === "idle" && (
+        <>
+          <div className="flex items-start gap-2">
+            <UploadCloud className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div>
+              <p className="text-[11px] font-semibold text-foreground/80 leading-snug">{doc.label}</p>
+              {doc.labelHindi && <p className="text-[10px] text-muted-foreground">{doc.labelHindi}</p>}
+            </div>
+          </div>
+          <p className="text-[9px] text-muted-foreground mt-1.5 leading-snug ml-6">{doc.description}</p>
+        </>
+      )}
+
+      {safeState.status !== "idle" && safeState.status !== "completed" && (
+        <div className="flex flex-col items-center text-center py-1">
+          <Loader2 className="h-5 w-5 text-primary animate-spin mb-1" />
+          <span className="text-[11px] font-semibold text-primary">{getStatusText()}</span>
+          <div className="w-full bg-border h-1 rounded-full mt-2 overflow-hidden">
+            <div
+              className="bg-primary h-full transition-all duration-300 rounded-full"
+              style={{ width: `${safeState.progress}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {safeState.status === "completed" && (
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">{doc.label}</p>
+              <p className="text-[9px] text-muted-foreground truncate max-w-[120px] font-mono">{safeState.fileName}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onClear(doc.id); }}
+            className="text-[9px] font-bold text-destructive hover:underline shrink-0"
+          >
+            Clear
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -583,16 +1100,17 @@ function UploadZone({
   disabled,
 }: {
   label: string;
-  id: "firstParty" | "secondParty" | "payment";
-  state: { fileName: string | null; status: string; progress: number };
-  onUpload: (section: "firstParty" | "secondParty" | "payment", file: File) => void;
-  onClear: (section: "firstParty" | "secondParty" | "payment") => void;
+  id: string;
+  state: { fileName: string | null; status: string; progress: number } | undefined;
+  onUpload: (sectionId: string, file: File) => void;
+  onClear: (sectionId: string) => void;
   disabled: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const safeState = state ?? { fileName: null, status: "idle", progress: 0 };
 
   const getStatusText = () => {
-    switch (state.status) {
+    switch (safeState.status) {
       case "uploading": return "Uploading...";
       case "ocr": return "Analyzing text...";
       case "parsing": return "Extracting details...";
@@ -611,11 +1129,11 @@ function UploadZone({
     <div className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-border transition-all duration-300 ${
       disabled 
         ? "opacity-45 cursor-not-allowed select-none bg-accent/5" 
-        : state.status === "idle"
+        : safeState.status === "idle"
           ? "bg-background hover:bg-accent/40 hover:border-primary/50 cursor-pointer"
           : "bg-accent/15 border-primary/30"
     }`}
-      onClick={() => !disabled && state.status === "idle" && fileInputRef.current?.click()}
+      onClick={() => !disabled && safeState.status === "idle" && fileInputRef.current?.click()}
     >
       <input
         type="file"
@@ -626,7 +1144,7 @@ function UploadZone({
         disabled={disabled}
       />
       
-      {state.status === "idle" && (
+      {safeState.status === "idle" && (
         <div className="flex flex-col items-center text-center">
           <UploadCloud className="h-6 w-6 text-muted-foreground mb-1.5" />
           <span className="text-[11px] font-semibold text-foreground/80">{label}</span>
@@ -634,25 +1152,25 @@ function UploadZone({
         </div>
       )}
 
-      {state.status !== "idle" && state.status !== "completed" && (
+      {safeState.status !== "idle" && safeState.status !== "completed" && (
         <div className="w-full flex flex-col items-center text-center">
           <Loader2 className="h-6 w-6 text-primary animate-spin mb-1.5" />
           <span className="text-[11px] font-semibold text-primary">{getStatusText()}</span>
           <div className="w-full bg-border h-1 rounded-full mt-2.5 overflow-hidden">
             <div 
               className="bg-primary h-full transition-all duration-300 rounded-full animate-pulse" 
-              style={{ width: `${state.progress}%` }}
+              style={{ width: `${safeState.progress}%` }}
             />
           </div>
         </div>
       )}
 
-      {state.status === "completed" && (
+      {safeState.status === "completed" && (
         <div className="flex flex-col items-center text-center w-full">
           <CheckCircle2 className="h-6 w-6 text-emerald-500 mb-1.5" />
           <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">{getStatusText()}</span>
-          <span className="text-[9px] truncate max-w-full text-muted-foreground mt-0.5 px-2 font-mono" title={state.fileName || ""}>
-            {state.fileName}
+          <span className="text-[9px] truncate max-w-full text-muted-foreground mt-0.5 px-2 font-mono" title={safeState.fileName || ""}>
+            {safeState.fileName}
           </span>
           <button
             type="button"

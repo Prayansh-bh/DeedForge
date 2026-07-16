@@ -6,14 +6,26 @@ export interface DeedType {
   category: DeedCategory;
   description: string;
   fields: DeedField[];
+  documentUploads?: DocumentUpload[];
   template: string;
+  /** If true, this deed is excluded from the home-page listing (accessible via direct URL only). */
+  hidden?: boolean;
 }
 
 export interface DeedField {
   key: string;
   label: string;
-  type: "text" | "textarea" | "date" | "number";
+  type: "text" | "textarea" | "date" | "number" | "file";
   placeholder?: string;
+}
+
+export interface DocumentUpload {
+  id: string;
+  label: string;
+  labelHindi?: string;
+  description: string;
+  fills: string[];    // which field keys this document fills
+  required: boolean;
 }
 
 const commonParties: DeedField[] = [
@@ -57,6 +69,235 @@ IN WITNESS WHEREOF the parties have signed this Deed on the day and year first a
 _______________________              _______________________
    SELLER                                    PURCHASER`,
   },
+  {
+    slug: "sale-deed-apartment-flat",
+    name: "Sale Deed – Apartment/Flat",
+    category: "registered",
+    hidden: true,   // reached via Sale Deed → Residential → Apartment/Flat sub-type, not listed separately
+    description: "Full sale deed for Apartment/Flat under Madhya Pradesh law. Upload your documents to auto-fill all fields including vendor/vendee details, property schedule, and payment proof.",
+    documentUploads: [
+      {
+        id: "vendorAadhaar",
+        label: "Vendor's Aadhaar Card",
+        labelHindi: "विक्रेता का आधार कार्ड",
+        description: "Extracts: Vendor name, father/husband name, address, age, Aadhaar number",
+        fills: ["vendorName", "vendorFatherName", "vendorAge", "vendorAddress", "vendorAadhaar"],
+        required: true,
+      },
+      {
+        id: "vendorPAN",
+        label: "Vendor's PAN Card",
+        labelHindi: "विक्रेता का पैन कार्ड",
+        description: "Extracts: Vendor PAN number",
+        fills: ["vendorPAN"],
+        required: true,
+      },
+      {
+        id: "vendeeAadhaar",
+        label: "Vendee's Aadhaar Card",
+        labelHindi: "क्रेता का आधार कार्ड",
+        description: "Extracts: Vendee name, father/husband name, address, age, Aadhaar number",
+        fills: ["vendeeName", "vendeeFatherName", "vendeeAge", "vendeeAddress", "vendeeAadhaar"],
+        required: true,
+      },
+      {
+        id: "vendeePAN",
+        label: "Vendee's PAN Card",
+        labelHindi: "क्रेता का पैन कार्ड",
+        description: "Extracts: Vendee PAN number",
+        fills: ["vendeePAN"],
+        required: true,
+      },
+      {
+        id: "motherDeed",
+        label: "Mother Deed / Previous Sale Deed",
+        labelHindi: "पूर्व पंजीकृत विक्रय विलेख",
+        description: "Extracts: Previous registration date, document no., book/volume no., Sub-Registrar office name",
+        fills: ["sroOfficeName", "prevRegDate", "prevDocNumber", "prevJildNumber", "societyName"],
+        required: true,
+      },
+      {
+        id: "khasra",
+        label: "Khasra / Municipal Property Tax Receipt",
+        labelHindi: "भू-राजस्व रिकॉर्ड / संपत्तिकर रसीद",
+        description: "Extracts: Khasra no., Halka no., Village/Town, District, Property ID",
+        fills: ["khasraNumber", "halkaNumber", "gramName", "districtName"],
+        required: true,
+      },
+      {
+        id: "allotmentLetter",
+        label: "Allotment Letter / Builder-Buyer Agreement",
+        labelHindi: "आवंटन पत्र / बिल्डर-क्रेता अनुबंध",
+        description: "Extracts: Flat no., Floor, Block/Tower, Super built-up area, Carpet area, Parking no.",
+        fills: ["flatNumber", "floorNumber", "blockName", "superBuiltUpArea", "carpetArea", "parkingNumber"],
+        required: true,
+      },
+      {
+        id: "layoutPlan",
+        label: "Approved Building/Layout Plan",
+        labelHindi: "स्वीकृत भवन/लेआउट प्लान",
+        description: "Extracts: Exact boundaries (North, South, East, West) of the flat",
+        fills: ["boundaryNorth", "boundarySouth", "boundaryEast", "boundaryWest"],
+        required: true,
+      },
+      {
+        id: "bankPayment",
+        label: "Bank Payment Receipt(s) – RTGS/NEFT/Cheque/DD",
+        labelHindi: "भुगतान प्रमाण / बैंक रसीद",
+        description: "Extracts: Total sale amount (figures & words), UTR no., Cheque/DD no., date, bank name",
+        fills: ["saleAmountFigures", "saleAmountWords", "paymentDetails"],
+        required: true,
+      },
+    ],
+    fields: [
+      // Vendor (First Party)
+      { key: "vendorName",       label: "Vendor Full Name (विक्रेता का नाम)",          type: "text",     placeholder: "e.g. Rajesh Kumar Sharma" },
+      { key: "vendorFatherName", label: "Vendor Father/Husband Name (पिता/पति का नाम)", type: "text",     placeholder: "e.g. Ramesh Sharma" },
+      { key: "vendorAge",        label: "Vendor Age (आयु)",                             type: "number",   placeholder: "e.g. 45" },
+      { key: "vendorAddress",    label: "Vendor Address (पूर्ण पता)",                   type: "textarea", placeholder: "Full residential address" },
+      { key: "vendorAadhaar",    label: "Vendor Aadhaar Number (आधार संख्या)",          type: "text",     placeholder: "e.g. 9876 5432 1098" },
+      { key: "vendorPAN",        label: "Vendor PAN Number (पैन संख्या)",               type: "text",     placeholder: "e.g. ABCDE1234F" },
+      // Vendee (Second Party)
+      { key: "vendeeName",       label: "Vendee Full Name (क्रेता का नाम)",             type: "text",     placeholder: "e.g. Priya Verma" },
+      { key: "vendeeFatherName", label: "Vendee Father/Husband Name (पिता/पति का नाम)", type: "text",     placeholder: "e.g. Anil Verma" },
+      { key: "vendeeAge",        label: "Vendee Age (आयु)",                             type: "number",   placeholder: "e.g. 38" },
+      { key: "vendeeAddress",    label: "Vendee Address (पूर्ण पता)",                   type: "textarea", placeholder: "Full residential address" },
+      { key: "vendeeAadhaar",    label: "Vendee Aadhaar Number (आधार संख्या)",          type: "text",     placeholder: "e.g. 1234 5678 9012" },
+      { key: "vendeePAN",        label: "Vendee PAN Number (पैन संख्या)",               type: "text",     placeholder: "e.g. FGHIJ5678K" },
+      // Property Recitals
+      { key: "societyName",      label: "Society/Building Name (भवन/सोसायटी का नाम)",  type: "text",     placeholder: "e.g. Sunshine Residency" },
+      { key: "khasraNumber",     label: "Khasra Number (खसरा नंबर)",                   type: "text",     placeholder: "e.g. 123/1" },
+      { key: "halkaNumber",      label: "Halka Number (हल्का नंबर)",                   type: "text",     placeholder: "e.g. 45" },
+      { key: "gramName",         label: "Village/Town (मौजा/शहर)",                     type: "text",     placeholder: "e.g. Bhopal" },
+      { key: "districtName",     label: "District (जिला)",                             type: "text",     placeholder: "e.g. Bhopal, Madhya Pradesh" },
+      { key: "sroOfficeName",    label: "Sub-Registrar Office (उप-पंजीयक कार्यालय)",  type: "text",     placeholder: "e.g. SRO, Bhopal City" },
+      { key: "prevRegDate",      label: "Previous Registration Date (पूर्व पंजीयन तिथि)", type: "date" },
+      { key: "prevDocNumber",    label: "Previous Document Number (दस्तावेज़ क्रमांक)", type: "text",     placeholder: "e.g. 1245/2019" },
+      { key: "prevJildNumber",   label: "Previous Volume/Jild Number (जिल्द नंबर)",   type: "text",     placeholder: "e.g. 5" },
+      // Flat Schedule
+      { key: "flatNumber",       label: "Flat/Apartment Number (फ्लैट नंबर)",         type: "text",     placeholder: "e.g. 402" },
+      { key: "floorNumber",      label: "Floor Number (फ्लोर नंबर)",                  type: "text",     placeholder: "e.g. 4th" },
+      { key: "blockName",        label: "Block/Tower (ब्लॉक/टावर)",                   type: "text",     placeholder: "e.g. Tower A" },
+      { key: "superBuiltUpArea", label: "Super Built-up Area (सुपर बिल्ट-अप एरिया)", type: "text",     placeholder: "e.g. 1250 sq ft" },
+      { key: "carpetArea",       label: "Carpet Area (कारपेट एरिया)",                 type: "text",     placeholder: "e.g. 980 sq ft" },
+      { key: "parkingNumber",    label: "Parking Space Number (पार्किंग नंबर)",       type: "text",     placeholder: "e.g. B-14 (Optional)" },
+      // Boundaries
+      { key: "boundaryNorth",    label: "North Boundary (उत्तर में)",                 type: "text",     placeholder: "e.g. Flat No. 401" },
+      { key: "boundarySouth",    label: "South Boundary (दक्षिण में)",                type: "text",     placeholder: "e.g. Open Terrace" },
+      { key: "boundaryEast",     label: "East Boundary (पूर्व में)",                  type: "text",     placeholder: "e.g. Corridor / Lift" },
+      { key: "boundaryWest",     label: "West Boundary (पश्चिम में)",                 type: "text",     placeholder: "e.g. External Wall" },
+      // Consideration
+      { key: "saleAmountFigures", label: "Sale Amount in Figures — INR (राशि अंकों में)", type: "number", placeholder: "e.g. 5500000" },
+      { key: "saleAmountWords",   label: "Sale Amount in Words (राशि शब्दों में)",       type: "text",   placeholder: "e.g. Fifty-Five Lakhs Rupees Only" },
+      { key: "paymentDetails",    label: "Payment Details – UTR/Cheque/DD (भुगतान विवरण)", type: "textarea", placeholder: "e.g. NEFT UTR No. UTIB00012458921 dated 15-07-2026, Bank: SBI" },
+    ],
+    template: `अचल संपत्ति विक्रय विलेख (SALE DEED)
+मध्य प्रदेश में अपार्टमेंट/फ्लैट बिक्री हेतु
+════════════════════════════════════════════════
+
+पक्षकारों का विवरण (PARTIES)
+
+विक्रेता: {vendorName}
+पिता/पति का नाम: {vendorFatherName}
+आयु: लगभग {vendorAge} वर्ष
+निवासी: {vendorAddress}
+पैन नंबर: {vendorPAN}
+आधार नंबर: {vendorAadhaar}
+(जिन्हें आगे "विक्रेता" या "प्रथम पक्ष" कहा गया है)
+
+                    -- बनाम --
+
+क्रेता: {vendeeName}
+पिता/पति का नाम: {vendeeFatherName}
+आयु: लगभग {vendeeAge} वर्ष
+निवासी: {vendeeAddress}
+पैन नंबर: {vendeePAN}
+आधार नंबर: {vendeeAadhaar}
+(जिन्हें आगे "क्रेता" या "द्वितीय पक्ष" कहा गया है)
+
+────────────────────────────────────────────────
+प्रस्तावना एवं पूर्व इतिहास (RECITALS)
+────────────────────────────────────────────────
+
+चूंकि (WHEREAS) विक्रेता उस बहुमंजिला आवासीय परिसर/भवन का पूर्ण और
+एकमात्र स्वामी है, जो कि {societyName} के नाम से स्थित है, जिसका खसरा
+नंबर {khasraNumber}, पटवारी हल्का नंबर {halkaNumber}, मौजा/ग्राम {gramName},
+तहसील व जिला {districtName}, मध्य प्रदेश में स्थित है।
+
+विक्रेता ने उक्त संपत्ति को उप-पंजीयक कार्यालय {sroOfficeName} के समक्ष
+पंजीकृत विक्रय विलेख दिनांक {prevRegDate} को दस्तावेज़ क्रमांक {prevDocNumber},
+जिल्द नंबर {prevJildNumber} के माध्यम से क्रय किया था।
+
+तथा चूंकि विक्रेता ने उक्त संपत्ति के अंतर्गत आने वाले अपार्टमेंट/फ्लैट
+नंबर {flatNumber}, फ्लोर नंबर {floorNumber} को सभी स्वत्वों सहित पूर्ण
+रूप से बेचने का प्रस्ताव क्रेता के समक्ष रखा, जिसे क्रेता ने कुल प्रतिफल
+राशि रुपये {saleAmountFigures}/- (शब्दों में: {saleAmountWords} रुपये मात्र)
+में पूर्णतः भारमुक्त क्रय करने हेतु स्वीकार कर लिया है।
+
+────────────────────────────────────────────────
+शर्तें एवं प्रावधान (TERMS & CONDITIONS)
+────────────────────────────────────────────────
+
+१. प्रतिफल एवं पावती (Consideration & Receipt):
+   क्रेता ने विक्रेता को तयशुदा पूर्ण प्रतिफल राशि रुपये {saleAmountFigures}/-
+   का भुगतान बैंक माध्यम {paymentDetails} द्वारा कर दिया है, जिसकी प्राप्ति
+   विक्रेता इसके द्वारा स्वीकार करता है।
+
+२. स्वामित्व का हस्तांतरण (Transfer of Title):
+   इस विलेख के निष्पादन के साथ ही विक्रेता उक्त अपार्टमेंट/फ्लैट से संबंधित
+   अपने सभी अधिकार, स्वत्व, हित, मार्ग-अधिकार और सुख-भोग के अधिकार पूर्ण
+   और पूर्ण स्वामित्व के साथ क्रेता को हस्तांतरित करता है।
+
+३. वास्तविक आधिपत्य (Delivery of Possession):
+   विक्रेता ने उक्त फ्लैट का वास्तविक, भौतिक और रिक्त आधिपत्य तथा उससे
+   संबंधित सभी मूल लिंक दस्तावेज़ आज दिनांक को क्रेता को सौंप दिए हैं।
+
+४. भारमुक्ति का आश्वासन (Clear Title Guarantee):
+   विक्रेता गारंटी देता है कि उक्त फ्लैट सभी प्रकार के ऋणों, बंधकों,
+   न्यायालयी वादों, कुर्की या किसी अन्य कानूनी विवादों से पूर्णतः मुक्त है।
+
+५. कर एवं अन्य देयताएं (Taxes and Outgoings):
+   आज की तिथि तक के सभी संपत्तिकर, बिजली बिल, जल कर, और रखरखाव शुल्क का
+   भुगतान विक्रेता द्वारा कर दिया गया है। आज के बाद के सभी कर क्रेता की
+   जिम्मेदारी होंगे।
+
+६. नामांतरण का अधिकार (Mutation & Utilities):
+   क्रेता को इस विलेख के आधार पर संपत्ति का नामांतरण अपने नाम पर कराने का
+   पूर्ण अधिकार होगा।
+
+────────────────────────────────────────────────
+अनुसूची: संपत्ति का विवरण (SCHEDULE OF PROPERTY)
+────────────────────────────────────────────────
+
+  फ्लैट/अपार्टमेंट नंबर  : {flatNumber}
+  फ्लोर                   : {floorNumber}
+  ब्लॉक/टावर              : {blockName}
+  सुपर बिल्ट-अप एरिया     : {superBuiltUpArea}
+  कारपेट एरिया            : {carpetArea}
+  पार्किंग नंबर           : {parkingNumber}
+
+  चतुःसीमा (Boundaries):
+    उत्तर में (North) : {boundaryNorth}
+    दक्षिण में (South): {boundarySouth}
+    पूर्व में (East)  : {boundaryEast}
+    पश्चिम में (West) : {boundaryWest}
+
+════════════════════════════════════════════════
+हस्ताक्षर (SIGNATURES)
+════════════════════════════════════════════════
+
+___________________________        ___________________________
+विक्रेता / प्रथम पक्ष              क्रेता / द्वितीय पक्ष
+({vendorName})                     ({vendeeName})
+
+
+गवाहों के हस्ताक्षर (WITNESSES):
+
+१. हस्ताक्षर: ____________________   नाम: _____________ पता: ______________
+
+२. हस्ताक्षर: ____________________   नाम: _____________ पता: ______________`,
+  },
+
   {
     slug: "gift-deed",
     name: "Gift Deed",
@@ -407,8 +648,8 @@ _______________________              _______________________
   },
 ];
 
-export const registeredDeeds = deedTypes.filter((d) => d.category === "registered");
-export const unregisteredDeeds = deedTypes.filter((d) => d.category === "unregistered");
+export const registeredDeeds = deedTypes.filter((d) => d.category === "registered" && !d.hidden);
+export const unregisteredDeeds = deedTypes.filter((d) => d.category === "unregistered" && !d.hidden);
 
 export function getDeedBySlug(slug: string) {
   return deedTypes.find((d) => d.slug === slug);
