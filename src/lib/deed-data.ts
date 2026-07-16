@@ -37,6 +37,223 @@ const commonParties: DeedField[] = [
   { key: "secondPartyIdNumber", label: "Second Party ID (Aadhaar/PAN)", type: "text" },
 ];
 
+// ─── Duplex Sale Deed (Hindi Template) ───────────────────────────────────────
+export const DUPLEX_DEED: DeedType = {
+  slug: "sale-deed-duplex",
+  name: "Sale Deed – Duplex",
+  category: "registered",
+  hidden: true,
+  description: "मध्य प्रदेश कानून के अंतर्गत डुप्लेक्स/बंगले की बिक्री हेतु पूर्ण विक्रय-पत्र। दस्तावेज़ अपलोड करके सभी फ़ील्ड स्वतः भरें।",
+  documentUploads: [
+    {
+      id: "masterRegistry",
+      label: "Master Registry Document",
+      labelHindi: "संपूर्ण रजिस्ट्री दस्तावेज़",
+      description: "Upload an existing registry or draft. We will scan it to auto-fill all available property and party details instantly.",
+      fills: ["all"],
+      required: false,
+    },
+    {
+      id: "vendorAadhaar",
+      label: "Vendor's Aadhaar Card",
+      labelHindi: "विक्रेता का आधार कार्ड",
+      description: "Extracts: Vendor name, father/husband name, address, age, Aadhaar number",
+      fills: ["vendorName", "vendorFatherName", "vendorAge", "vendorAddress", "vendorAadhaar"],
+      required: true,
+    },
+    {
+      id: "vendorPAN",
+      label: "Vendor's PAN Card",
+      labelHindi: "विक्रेता का पैन कार्ड",
+      description: "Extracts: Vendor PAN number",
+      fills: ["vendorPAN"],
+      required: true,
+    },
+    {
+      id: "vendeeAadhaar",
+      label: "Vendee's Aadhaar Card",
+      labelHindi: "क्रेता का आधार कार्ड",
+      description: "Extracts: Vendee name, father/husband name, address, age, Aadhaar number",
+      fills: ["vendeeName", "vendeeFatherName", "vendeeAge", "vendeeAddress", "vendeeAadhaar"],
+      required: true,
+    },
+    {
+      id: "vendeePAN",
+      label: "Vendee's PAN Card",
+      labelHindi: "क्रेता का पैन कार्ड",
+      description: "Extracts: Vendee PAN number",
+      fills: ["vendeePAN"],
+      required: true,
+    },
+    {
+      id: "motherDeed",
+      label: "Mother Deed / Previous Sale Deed",
+      labelHindi: "पूर्व पंजीकृत विक्रय विलेख",
+      description: "Extracts: Previous registration date, e-registration no., Sub-Registrar office name",
+      fills: ["sroOfficeName", "prevRegDate", "ePanjeeyanNumber", "developerName", "colonyName"],
+      required: true,
+    },
+    {
+      id: "khasra",
+      label: "Khasra / Property Records",
+      labelHindi: "खसरा / भू-राजस्व रिकॉर्ड",
+      description: "Extracts: Khasra no., Halka no., Village, Tehsil, District, Ward no.",
+      fills: ["khasraNumber", "halkaNumber", "gramName", "tehsilName", "districtName", "wardNumber"],
+      required: true,
+    },
+    {
+      id: "layoutPlan",
+      label: "Approved Layout/Building Plan",
+      labelHindi: "स्वीकृत भवन/लेआउट प्लान",
+      description: "Extracts: Plot area, Ground floor area, First floor area, Boundaries (N/S/E/W), House/Bungalow number, type",
+      fills: ["plotArea", "groundFloorArea", "firstFloorArea", "boundaryNorth", "boundarySouth", "boundaryEast", "boundaryWest", "houseBungalowNumber", "propertyTypeCode"],
+      required: true,
+    },
+    {
+      id: "bankPayment",
+      label: "Bank Payment Receipts – Cheque/DD/RTGS",
+      labelHindi: "भुगतान प्रमाण / बैंक रसीद",
+      description: "Extracts: Sale amount (figures & words), Cheque/DD no., date, bank name, branch",
+      fills: ["saleAmountFigures", "saleAmountWords", "paymentInstallment1", "paymentInstallment2", "paymentInstallment3", "paymentInstallment4", "paymentInstallment5"],
+      required: true,
+    },
+  ],
+  fields: [
+    // ── विक्रय मूल्य ──────────────────────────────────────────────────────────
+    { key: "saleAmountFigures",  label: "विक्रय मूल्य अंकों में (Sale Amount in Figures – INR)", type: "number",   placeholder: "e.g. 5500000" },
+    { key: "saleAmountWords",    label: "विक्रय मूल्य शब्दों में (Amount in Words)",              type: "text",     placeholder: "e.g. पचपन लाख रुपये मात्र" },
+    // ── विक्रेता (Vendor) ─────────────────────────────────────────────────────
+    { key: "vendorName",         label: "विक्रेता 1 का नाम (Vendor 1 Name)",                      type: "text",     placeholder: "e.g. राजेश कुमार शर्मा" },
+    { key: "vendorRelation",     label: "विक्रेता 1 का संबंध (आत्मज/पत्नी/पति)",                 type: "text",     placeholder: "e.g. आत्मज" },
+    { key: "vendorFatherName",   label: "विक्रेता 1 के पिता/माता/पति का नाम",                    type: "text",     placeholder: "e.g. श्री रामेश लाल शर्मा" },
+    { key: "vendorName2",        label: "विक्रेता 2 का नाम (Vendor 2 Name – if any)",              type: "text",     placeholder: "वैकल्पिक" },
+    { key: "vendorRelation2",    label: "विक्रेता 2 का संबंध (Relation)",                          type: "text",     placeholder: "e.g. पत्नी" },
+    { key: "vendorFatherName2",  label: "विक्रेता 2 के संबंधित व्यक्ति का नाम",                   type: "text",     placeholder: "वैकल्पिक" },
+    { key: "vendorAddress",      label: "विक्रेता का पूर्ण पता (Vendor Address)",                 type: "textarea", placeholder: "Full residential address" },
+    { key: "vendorAadhaar",      label: "विक्रेता का आधार नंबर",                                  type: "text",     placeholder: "e.g. 9876 5432 1098" },
+    { key: "vendorPAN",          label: "विक्रेता का पैन नंबर",                                    type: "text",     placeholder: "e.g. ABCDE1234F" },
+    // ── क्रेता (Vendee) ───────────────────────────────────────────────────────
+    { key: "vendeeName",         label: "क्रेता का नाम (Vendee Name)",                             type: "text",     placeholder: "e.g. प्रिया वर्मा" },
+    { key: "vendeeRelation",     label: "क्रेता का संबंध (पुत्र/पुत्री/पत्नी/पति)",               type: "text",     placeholder: "e.g. पुत्री" },
+    { key: "vendeeFatherName",   label: "क्रेता के पिता/माता/पति का नाम",                         type: "text",     placeholder: "e.g. श्री अनिल वर्मा" },
+    { key: "vendeeAddress",      label: "क्रेता का पूर्ण पता (Vendee Address)",                   type: "textarea", placeholder: "Full residential address" },
+    { key: "vendeeAadhaar",      label: "क्रेता का आधार नंबर",                                    type: "text",     placeholder: "e.g. 1234 5678 9012" },
+    { key: "vendeePAN",          label: "क्रेता का पैन नंबर",                                      type: "text",     placeholder: "e.g. FGHIJ5678K" },
+    // ── भुगतान विवरण (Payment Instalments) ────────────────────────────────────
+    { key: "paymentInstallment1", label: "भुगतान किश्त 1 – राशि, चेक/DD क्रमांक, दिनांक, बैंक", type: "textarea", placeholder: "e.g. रू. 10,00,000/- चेक क्र. 123456 दि. 01-06-2026 SBI शाखा भोपाल" },
+    { key: "paymentInstallment2", label: "भुगतान किश्त 2 (वैकल्पिक)",                             type: "textarea", placeholder: "वैकल्पिक" },
+    { key: "paymentInstallment3", label: "भुगतान किश्त 3 (वैकल्पिक)",                             type: "textarea", placeholder: "वैकल्पिक" },
+    { key: "paymentInstallment4", label: "भुगतान किश्त 4 (वैकल्पिक)",                             type: "textarea", placeholder: "वैकल्पिक" },
+    { key: "paymentInstallment5", label: "गृह ऋण भुगतान किश्त 5 (वैकल्पिक)",                    type: "textarea", placeholder: "वैकल्पिक – होम लोन DD विवरण" },
+    // ── संपत्ति विवरण (Property Details) ──────────────────────────────────────
+    { key: "houseBungalowNumber", label: "भवन/बंगला क्रमांक (House/Bungalow No.)",               type: "text",     placeholder: "e.g. B-45" },
+    { key: "propertyTypeCode",    label: "टाईप (Property Type Code)",                              type: "text",     placeholder: "e.g. Type-3" },
+    { key: "khasraNumber",        label: "खसरा क्रमांक (Khasra No.)",                             type: "text",     placeholder: "e.g. 123/1" },
+    { key: "developerName",       label: "कॉलोनी विकासकर्ता का नाम (Developer/Builder)",          type: "text",     placeholder: "e.g. मेसर्स श्री बिल्डर्स" },
+    { key: "colonyName",          label: "कॉलोनी का नाम (Colony Name)",                           type: "text",     placeholder: "e.g. हरित विहार" },
+    { key: "gramName",            label: "ग्राम/मौजा (Village/Town)",                              type: "text",     placeholder: "e.g. रातीबड़" },
+    { key: "halkaNumber",         label: "पटवारी हल्का नंबर (Halka No.)",                         type: "text",     placeholder: "e.g. 45" },
+    { key: "tehsilName",          label: "तहसील (Tehsil)",                                          type: "text",     placeholder: "e.g. भोपाल" },
+    { key: "districtName",        label: "जिला (District)",                                        type: "text",     placeholder: "e.g. भोपाल, मध्य प्रदेश" },
+    { key: "plotArea",            label: "भूखण्ड क्षेत्रफल वर्गमीटर (Plot Area sqm)",            type: "text",     placeholder: "e.g. 162.50" },
+    { key: "groundFloorArea",     label: "भूतल क्षेत्रफल वर्गमीटर (Ground Floor sqm)",           type: "text",     placeholder: "e.g. 90.00" },
+    { key: "firstFloorArea",      label: "प्रथम तल क्षेत्रफल वर्गमीटर (First Floor sqm)",        type: "text",     placeholder: "e.g. 90.00" },
+    { key: "wardNumber",          label: "वार्ड क्रमांक (Ward No.)",                               type: "text",     placeholder: "e.g. 42" },
+    // ── चतुःसीमा (Boundaries) ─────────────────────────────────────────────────
+    { key: "boundaryEast",        label: "पूर्व दिशा की सीमा (East Boundary)",                    type: "text",     placeholder: "e.g. सड़क / प्लॉट नं. 44" },
+    { key: "boundaryWest",        label: "पश्चिम दिशा की सीमा (West Boundary)",                  type: "text",     placeholder: "e.g. प्लॉट नं. 46" },
+    { key: "boundaryNorth",       label: "उत्तर दिशा की सीमा (North Boundary)",                   type: "text",     placeholder: "e.g. प्लॉट नं. 30" },
+    { key: "boundarySouth",       label: "दक्षिण दिशा की सीमा (South Boundary)",                  type: "text",     placeholder: "e.g. मुख्य मार्ग" },
+    // ── अन्य विवरण (Other Recitals) ──────────────────────────────────────────
+    { key: "originalDeveloperName", label: "मूल विकासकर्ता संस्था का नाम (Original Developer)",  type: "text",     placeholder: "e.g. मेसर्स ABC प्रॉपर्टीज" },
+    { key: "originalDeveloperAddress", label: "मूल विकासकर्ता का कार्यालयीन पता",               type: "textarea", placeholder: "कार्यालय का पूर्ण पता" },
+    { key: "partnerName",         label: "भागीदार का नाम (Partner Name)",                          type: "text",     placeholder: "e.g. श्री सुरेश कुमार" },
+    { key: "partnerFatherName",   label: "भागीदार के पिता/माता का नाम",                           type: "text",     placeholder: "" },
+    { key: "partnerAddress",      label: "भागीदार का पता (Partner Address)",                      type: "textarea", placeholder: "" },
+    { key: "constructionCompany", label: "कन्स्ट्रक्शन कंपनी का नाम",                             type: "text",     placeholder: "e.g. मेसर्स XYZ Constructions" },
+    { key: "mukhtyarName",        label: "मुखत्तयार आम का नाम (Power of Attorney Holder)",        type: "text",     placeholder: "" },
+    { key: "mukhtyarFatherName",  label: "मुखत्तयार के पिता/माता का नाम",                        type: "text",     placeholder: "" },
+    { key: "mukhtyarAddress",     label: "मुखत्तयार का निवास पता",                               type: "textarea", placeholder: "" },
+    { key: "prevSaleDate",        label: "मूल विक्रय दिनांक (Previous Sale Date)",                type: "date" },
+    { key: "ePanjeeyanNumber",    label: "ई-पंजीयन क्रमांक (e-Registration No.)",                  type: "text",     placeholder: "e.g. 4521/2022" },
+    { key: "sroOfficeName",       label: "उप-पंजीयक कार्यालय का स्थान (Sub-Registrar Office)",   type: "text",     placeholder: "e.g. भोपाल" },
+    { key: "executionDate",       label: "विक्रय-पत्र निष्पादन दिनांक (Execution Date)",          type: "date" },
+  ],
+  template: `:: विक्रय-पत्र ::
+टीप- वर्गाकार कोष्ठक [ ] में दिये गये विकल्पों में से पक्षकार के अनुसार उपयुक्त शब्द रखें।
+─────────────────────────────────────────────────────────────────
+
+विक्रय-पत्र मूल्य रू. {saleAmountFigures}/- (अक्षरी रूपया {saleAmountWords} मात्र)
+
+विक्रेता:-
+श्री/श्रीमती {vendorName} {vendorRelation} श्री/श्रीमती {vendorFatherName}, आयु- वयस्क,
+{vendorName2}{vendorRelation2}{vendorFatherName2}
+दोनों/समस्त निवासी: {vendorAddress}।
+
+क्रेता:-
+श्री/श्रीमती {vendeeName} {vendeeRelation} श्री/श्रीमती {vendeeFatherName} आयु वयस्क,
+निवासी- {vendeeAddress} राष्ट्रीयता–भारतीय।
+
+─────────────────────────────────────────────────────────────────
+विक्रय मूल्य के भुगतान का विवरण:-
+
+संपूर्ण विक्रय मूल्य प्रतिफल राशि रू. {saleAmountFigures}/- (अक्षरी रूपया {saleAmountWords} मात्र) इस प्रकार विक्रेता को अदा की गई हैः-
+(1) {paymentInstallment1}
+(2) {paymentInstallment2}
+(3) {paymentInstallment3}
+(4) {paymentInstallment4}
+(5) {paymentInstallment5}
+
+नोट- विक्रेता द्वारा TDS की राशि 15 दिवस के अंदर जमा कर दी जावेगी।
+
+─────────────────────────────────────────────────────────────────
+विक्रय की जा रही संपत्ति का विवरणः-
+
+यह कि विक्रेता के स्वत्व, स्वामित्व एवं आधिपत्य का आवासीय भवन/बंगला क्रमांक – {houseBungalowNumber}, टाईप – {propertyTypeCode}, जो खसरा क्र. {khasraNumber} का अंश होकर मेसर्स {developerName} द्वारा विकसित कॉलोनी "{colonyName}" ग्राम {gramName}, पटवारी हल्का नंबर {halkaNumber} तहसील {tehsilName}, जिला {districtName} में स्थित है, जिसके भूखण्ड का कुल क्षेत्रफल {plotArea} वर्गमीटर है, जिसके भूतल पर {groundFloorArea} वर्गमीटर, प्रथम तल पर {firstFloorArea} वर्गमीटर सम्पत्ति निर्मित हैं। इस सम्पूर्ण सम्पत्ति को इस विक्रय पत्र के माध्यम से क्रेता के पक्ष में सदैव के लिये सर्वाधिकार सहित विक्रय किया जा रहा है। उक्त सम्पत्ति नगर निगम की सीमाओं के अंतर्गत वार्ड क्रमांक {wardNumber} में मुख्यमार्ग से अन्दर स्थित है, जिसकी चतुर्थ सीमायें इस प्रकार हैः-
+
+पूर्व में – {boundaryEast}
+पश्चिम में – {boundaryWest}
+उत्तर में – {boundaryNorth}
+दक्षिण में – {boundarySouth}
+
+यह कि उपरोक्त वर्णित विक्रयाधीन संपत्ति को संलग्न मानचित्र में लाल रंग की रेखाओं से घेरकर पूर्ण विवरण सहित दर्शाया गया है जो कि इस दस्तावेज विक्रय-पत्र का एक अंश भाग है।
+
+─────────────────────────────────────────────────────────────────
+अन्य विवरण:-
+
+यह कि उपरोक्त वर्णित सम्पत्ति सर्वप्रथम मेसर्स {originalDeveloperName} कार्यालयीन पता- {originalDeveloperAddress}, द्वारा भागीदार, श्री/श्रीमती {partnerName} पुत्र/पुत्री श्री/श्रीमती {partnerFatherName} पता- {partnerAddress} एवं मेसर्स {constructionCompany} द्वारा अभीप्रमाणीत मुखत्तयार आम श्री/श्रीमती {mukhtyarName} आत्मज/आत्मजा श्री/श्रीमती {mukhtyarFatherName} निवासी {mukhtyarAddress} ने (1) श्री/श्रीमती {vendorName} एवं (2) श्री/श्रीमती {vendorName2}, दोनों/समस्त निवासी: {vendorAddress} के पक्ष में दिनांक {prevSaleDate} को विक्रय किया गया जिसके विक्रय पत्र का ई पंजीयन {ePanjeeyanNumber} देकर उप पंजीयक कार्यालय, {sroOfficeName} में है। तबही से विक्रेता को उक्त सम्पत्ति पर समस्त अधिकार एवं सुखाधिकार बतौर विक्रेता के प्राप्त हैं। इसी आधार पर विक्रेता इस सम्पूर्ण सम्पत्ति को सदैव के लिये सर्वाधिकार सहित क्रेता के पक्ष में विक्रय कर रहे हैं और इस विक्रय पत्र का निष्पादन इस प्रकार उनके पक्ष में करके दे रहे हैं:-
+
+1. यह कि विक्रेता ने क्रेता को आश्वस्त किया है कि वह उपरोक्त वर्णित संपूर्ण संपत्ति को उनके हित में विक्रय करने में पूर्ण स्वतंत्र व सक्षम हैं।
+2. यह कि विक्रेता उक्त संपत्ति क्रेता के हित में हर प्रकार के ऋण, भार, बकाया आदि से मुक्त के रूप में अर्थात पाक व स्वच्छ के रूप में विक्रय कर रही हैं। विक्रेता यह भी घोषित करते हैं कि उनके द्वारा उपरोक्त वर्णित संपत्ति आज दिनांक के पूर्व किसी अन्य व्यक्ति के पक्ष में विक्रय, हस्तांतरित नहीं की गई है और न ही किसी को दान में, देनमेहर में, वसीयत में दी गई है और न ही उक्त संपत्ति कहीं किसी बैंक, वित्तीय संस्था या व्यक्ति सोसायटी आदि में बंधक या जमानत में रखी गई है और इस पर किसी का कोई ऋण या कर्ज बकाया नहीं है।
+3. यह कि उपरोक्त वर्णित बिक्रित संपूर्ण संपत्ति का विक्रय मूल्य विक्रेता के द्वारा इस दस्तावेज लिखे अनुसार प्राप्त कर लिया गया है तथा उन्हें अब विक्रय मूल्य के पेटे क्रेता से कुछ भी लेना शेष नहीं रहा है और उपरोक्त वर्णित संपत्ति को क्रेता के पक्ष में सदैव के लिए विक्रय कर उसका आधिपत्य खाली दशा में आज दिनांक को रूबरू में सौंप दिया है।
+4. यह कि क्रेता अब आज दिनांक से उपरोक्त संपत्ति का स्वयं बतौर मालिक की हैसियत से उसका उपयोग एवं उपभोग करने को स्वतंत्र व सक्षम हैं।
+5. यह कि विक्रेता के आज दिनांक के पूर्व के किसी मालिकाना नुक्स की त्रुटि के कारण उपरोक्त वर्णित बिक्रित संपत्ति संपूर्ण या उसका कोई हिस्सा भाग क्रेता के मालिकाना हक या कब्जे से निकल जाती है तो वे संपूर्ण विक्रय प्रतिफल राशि मय हर्जे खर्चे के विक्रेता से एक मुश्त वसूल पाने के अधिकारी होंगे।
+6. यह कि विक्रय दिनांक से पूर्व उपरोक्त वर्णित संपत्ति पर किसी भी प्रकार की कोई बकाया, देनदारियां शासकीय, अर्थदण्ड, सोसायटी चार्जेस, सम्पत्ति कर, बिजली का बिल, पानी का बिल आदि या अन्य कोई शास्ति आदि हुई तो उसे अदा करने की संपूर्ण जवाबदारी विक्रेता की होगी। परन्तु विक्रय दिनांक के पश्चात् से इस संपत्ति पर आने वाले दायित्वों के लिए क्रेता जिम्मेदार रहेंगे।
+7. यह कि क्रेता इस विक्रय पत्र के आधार पर शासकीय कार्यालयों एवं सोसायटी के अभिलेखों के रिकार्ड में अपने नाम का नामांतरण करा लें और इसमें विक्रेता हर प्रकार का सहयोग एवं हस्ताक्षर करने के लिए पाबंद एवं जिम्मेदार रहेंगे।
+8. यह कि उपरोक्त वर्णित बिक्रित संपत्ति संपूर्ण पर या उसके किसी भाग पर अब आज से विक्रेता एवं उनके कानूनन वारिस, उत्तराधिकारियों, संतानों, दायभागियों, भागीदारों एवं हितेषियों तथा मुख्तारआम आदि एवं अन्य का कोई वास्ता या सरोकार शेष नहीं रहा है।
+9. यह कि अब आज दिनांक से क्रेता उपरोक्त वर्णित बिक्रित संपत्ति संपूर्ण का अपनी इच्छानुसार उपयोग एवं उपभोग कर सकेंगे।
+10. यह कि विक्रय की जा रही संपत्ति वर्तमान में एक निर्मित सम्पत्ति की शक्ल में है और इसी अवस्था में विक्रय की जा रही है।
+11. यह कि आज दिनांक से पूर्व जो भी नियम एवं शर्ते विक्रेता पर लागू थे वे सभी नियम एवं शर्ते आज से क्रेता पर लागू हो गए हैं।
+12. यह कि विक्रेता ने इस संपत्ति से संबंधित पूर्व के समस्त मूल दस्तावेज क्रेता के सुपुर्द कर दिये है।
+13. यह कि इस विक्रय पत्र का पंजीयन शुल्क एवं मुद्रांक शुल्क विक्रेता के द्वारा वहन किया गया है।
+14. हम विक्रेता घोषणा करते है कि जो संपत्ति इस विलेख के साथ हस्तांतरित की जा रही है, पूर्व में विक्रय अथवा हस्तांतरण नहीं की गई है। हम भारतीय पंजीयन अधिनियम 1908 की धारा 22-क का कोई भी उल्लंघन नहीं कर रहे है।
+15. यह कि क्रेता उक्त संपत्ति के संबंध में घोषणा करते हैं कि उक्त संपत्ति के स्वामित्व के संबंध में पूर्णतः संतुष्ट होने के बाद ही क्रय कर रहे हैं।
+16. विक्रेता एवं क्रेता म.प्र. पंजीयन नियम 1939 के नियम 36 से अवगत हैं, तथा सम्पत्ति अन्तरण अधिनियम की धारा 55 के अनुसार उक्त क्रेता द्वारा स्वत्व की जांच कर ली गई है।
+
+─────────────────────────────────────────────────────────────────
+अतएव उपरोक्तानुसार यह दस्तावेज विक्रय-पत्र हम विक्रेता के द्वारा क्रेता के हित में अपने पूर्ण होश-हवास में रहते हुए आज दिनांक {executionDate} को दो गवाहों के समक्ष साक्ष्यांकित कर पंजीयत् करवा दिया कि प्रमाण रहे और वक्त जरूरत पर काम आवे।
+
+_______________________              _______________________
+विक्रेता (प्रथम पक्ष)               क्रेता (द्वितीय पक्ष)
+({vendorName})                       ({vendeeName})
+
+गवाहों के हस्ताक्षर (WITNESSES):
+१. हस्ताक्षर: ____________________   नाम: _____________ पता: ______________
+२. हस्ताक्षर: ____________________   नाम: _____________ पता: ______________
+
+नोट:- विक्रेता एवं क्रेता द्वारा दी गई जानकारी एवं दस्तावेजों के आधार पर प्रारूपण किया गया। पक्षकारों के द्वारा दी गई किसी भी गलत जानकारी के लिये पक्षकार स्वयं जिम्मेदार रहेंगे।`,
+};
+
 export const deedTypes: DeedType[] = [
   {
     slug: "sale-deed",
@@ -76,6 +293,14 @@ _______________________              _______________________
     hidden: true,   // reached via Sale Deed → Residential → Apartment/Flat sub-type, not listed separately
     description: "Full sale deed for Apartment/Flat under Madhya Pradesh law. Upload your documents to auto-fill all fields including vendor/vendee details, property schedule, and payment proof.",
     documentUploads: [
+      {
+        id: "masterRegistry",
+        label: "Master Registry Document",
+        labelHindi: "संपूर्ण रजिस्ट्री दस्तावेज़",
+        description: "Upload an existing registry or draft. We will scan it to auto-fill all available property and party details instantly.",
+        fills: ["all"],
+        required: false,
+      },
       {
         id: "vendorAadhaar",
         label: "Vendor's Aadhaar Card",

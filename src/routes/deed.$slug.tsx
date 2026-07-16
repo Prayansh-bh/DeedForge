@@ -1,7 +1,7 @@
 import { createFileRoute, Link, notFound, useNavigate } from '@tanstack/react-router';
 import { useMemo, useState, useRef, useEffect } from "react";
 import { ArrowLeft, Copy, Download, FileText, Home, Building2, Sprout, Lock, Unlock, UploadCloud, Loader2, CheckCircle2, ChevronDown, FileType2, Info } from "lucide-react";
-import { getDeedBySlug, renderDeed, type DeedField, type DocumentUpload, type DeedType } from "@/lib/deed-data";
+import { getDeedBySlug, renderDeed, type DeedField, type DocumentUpload, type DeedType, DUPLEX_DEED } from "@/lib/deed-data";
 import { useAuth } from "@/hooks/use-auth";
 import jsPDF from "jspdf";
 import * as htmlToImage from "html-to-image";
@@ -184,6 +184,14 @@ function DeedPage() {
       APARTMENT_FLAT_DEED
     ) {
       return APARTMENT_FLAT_DEED;
+    }
+    if (
+      deed.slug === "sale-deed" &&
+      propertyType === "Residential" &&
+      propertySubType === "Duplex" &&
+      DUPLEX_DEED
+    ) {
+      return DUPLEX_DEED;
     }
     return deed;
   }, [deed, propertyType, propertySubType]);
@@ -383,60 +391,252 @@ function DeedPage() {
     setTimeout(() => setCopied(false), 1600);
   };
 
-  const handleSimulatedUpload = (sectionId: string, file: File) => {
+  const handleDocumentUpload = async (sectionId: string, file: File) => {
     setUploadState(prev => ({
       ...prev,
-      [sectionId]: { fileName: file.name, status: "uploading", progress: 20 }
+      [sectionId]: { fileName: file.name, status: "uploading", progress: 10 }
     }));
 
-    setTimeout(() => {
+    try {
+      // Use Gemini 2.0 Flash for OCR
       setUploadState(prev => ({
         ...prev,
-        [sectionId]: { ...prev[sectionId], status: "ocr", progress: 60 }
+        [sectionId]: { ...prev[sectionId], status: "ocr", progress: 30 }
       }));
 
+      // Get API Key from localStorage or fallback to user's provided key
+      let apiKey = localStorage.getItem("GEMINI_API_KEY") || "AQ.Ab8RN6KbRuP4O-vw6Q1MBjAdNxornEjrrZfcv5a6JRejiu94dg";
+      
+      if (!apiKey) {
+        throw new Error("Gemini API Key is required for OCR.");
+      }
+
+      setUploadState(prev => ({
+        ...prev,
+        [sectionId]: { ...prev[sectionId], status: "ocr", progress: 50 }
+      }));
+
+      // Convert file to Base64
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]); // Extract raw base64 string
+        };
+        reader.onerror = reject;
+      });
+
+      setUploadState(prev => ({
+        ...prev,
+        [sectionId]: { ...prev[sectionId], status: "ocr", progress: 70 }
+      }));
+
+      let systemPrompt = "Extract all text from this document verbatim.";
+      const docUpload = effectiveDeed.documentUploads?.find(d => d.id === sectionId);
+      
+      if (sectionId === 'masterRegistry') {
+        systemPrompt = `You are an advanced Legal Document Automation Engineer specializing in Indian Property Law and precise data mapping. Your task is to extract data from unstructured multi-page Indian Sale Deeds (विक्रय-पत्र) PDFs and structure them into a rigid JSON format that feeds directly into a Next.js/MERN template system.
+
+### GOAL:
+Analyze the provided document comprehensively, resolve entity relationships (such as Partners or Power of Attorney holders), and output a single, flat JSON object mapping perfectly to the target schema.
+
+### INGESTION RULES:
+1. Context Scoping: Legal deeds contain recursive dates and names. Look at the primary headings ("विक्रेता" and "क्रेता") to lock onto the current transaction parties. Historical transactions mentioned in the "अन्य विवरण" (history) section must only be mapped to original developer/previous registry fields.
+2. Token Invariance: Do not abbreviate names, cut off addresses, or normalize figures. Extract the exact matching strings from the text.
+3. Language Conversion: The \`saleAmountWords\` field requires translating the numeric total value into clean Hindi words (e.g., 4000000 -> चालीस लाख).
+4. Granular Installment Parsing: Under the "Sale Consideration" section, you must extract every single payment installment line item sequentially. Do not group them into a single string. Break each item down into the exact object structure defined below.
+
+### OUTPUT SCHEMA (STRICT JSON ONLY):
+Return ONLY a valid JSON object matching the following structure. Do not append prose, explanations, or Markdown code blocks outside of raw JSON.
+
+{
+  "saleAmountFigures": "String (e.g., '4000000')",
+  "saleAmountWords": "String (Hindi text representation, e.g., 'चालीस लाख')",
+  "vendorName": "String (Company/Individual Name)",
+  "vendorRelation": "String (e.g., 'through partner', 'आत्मज')",
+  "vendorFatherName": "String",
+  "vendorAddress": "String",
+  "mukhtyarName": "String (PoA holder name if present, else empty string)",
+  "mukhtyarFatherName": "String",
+  "mukhtyarAddress": "String",
+  "vendeeName": "String (Combined buyers string if multi-owner)",
+  "vendeeRelation": "String",
+  "vendeeFatherName": "String",
+  "vendeeAddress": "String",
+  "houseBungalowNumber": "String",
+  "propertyTypeCode": "String (e.g., 'C')",
+  "khasraNumber": "String (e.g., '71/2 व 71/3')",
+  "colonyName": "String",
+  "gramName": "String",
+  "wardNumber": "String",
+  "plotArea": "String",
+  "groundFloorArea": "String",
+  "firstFloorArea": "String",
+  "boundaryEast": "String",
+  "boundaryWest": "String",
+  "boundaryNorth": "String",
+  "boundarySouth": "String",
+  "paymentInstallments": [
+    {
+      "serialNumber": "String (e.g., '1', '2')",
+      "amountFigures": "String (e.g., '50,000')",
+      "instrumentType": "String (Must be exactly 'Cheque' or 'Demand Draft' or 'RTGS/NEFT')",
+      "instrumentNumber": "String (The Cheque/DD/Transaction number, e.g., '501051')",
+      "paymentDate": "String (Date in DD/MM/YYYY format, e.g., '31/12/2020')",
+      "bankName": "String (Name of the issuing bank, e.g., 'SBI', 'PNB', 'UCO Bank')"
+    }
+  ],
+  "ePanjeeyanNumber": "String",
+  "sroOfficeName": "String",
+  "executionDate": "String (DD/MM/YYYY format)"
+}
+
+### PRIVACY GUARDRAIL:
+- If government identification numbers like Aadhaar numbers are discovered anywhere within the document text, do NOT output their numeric digits. Completely redact the digits and replace them with the text value "[Aadhaar Redacted]". 
+- Other document identifiers such as PAN or PF numbers should be preserved and passed through normally if required.`;
+      } else if (docUpload) {
+        // Dynamically build schema instructions based on the fields mapped to this document upload
+        const schemaFields: Record<string, string> = {};
+        docUpload.fills.forEach(key => {
+          const field = effectiveDeed.fields.find(f => f.key === key);
+          schemaFields[key] = field ? `String value for: ${field.label}` : "String value";
+        });
+
+        systemPrompt = `You are an advanced Legal Document Automation Engineer specializing in Indian Property Law and precise data mapping.
+Your task is to extract data from this document and return ONLY a valid JSON object matching the following schema. Do not append any explanations, comments, or Markdown code blocks.
+
+JSON Schema:
+${JSON.stringify(schemaFields, null, 2)}
+
+### PRIVACY GUARDRAIL:
+- If government identification numbers like Aadhaar numbers are discovered anywhere within the document text, do NOT output their numeric digits. Completely redact the digits and replace them with the text value "[Aadhaar Redacted]".
+- Other identifiers such as PAN numbers should be preserved and passed through normally if required.`;
+      }
+
+      // Call Gemini 2.5 Flash API (2.0 hits quota limit with the provided key)
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const response = await fetch(geminiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: systemPrompt },
+              { inline_data: { mime_type: file.type, data: base64Data } }
+            ]
+          }]
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || "Failed to fetch from Gemini API");
+      }
+
+      const responseData = await response.json();
+      const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+      setUploadState(prev => ({
+        ...prev,
+        [sectionId]: { ...prev[sectionId], status: "parsing", progress: 90 }
+      }));
+
+      console.log(`[Gemini Raw OCR Result for ${sectionId}]:`, text);
+
+      let newFills: Record<string, string> = {};
+      const keysToHighlight: string[] = [];
+
+      try {
+        // Parse the LLM's JSON response defensively
+        const cleanJsonStr = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+        const parsedJson = JSON.parse(cleanJsonStr);
+
+        if (sectionId === 'masterRegistry') {
+           // For the main sale deed, map the rigid schema directly
+           Object.entries(parsedJson).forEach(([key, val]) => {
+             if (val && typeof val === 'string' && val.trim() !== '') {
+               newFills[key] = val.trim();
+             } else if (Array.isArray(val) && val.length > 0 && key === 'paymentInstallments') {
+               // Map payment installment objects dynamically to the Hindi localized string
+               val.forEach((installment, idx) => {
+                 let text = "";
+                 if (typeof installment === 'object' && installment !== null) {
+                   const amt = installment.amountFigures || '';
+                   const instType = installment.instrumentType || '';
+                   const instNum = installment.instrumentNumber || '';
+                   const date = installment.paymentDate || '';
+                   const bank = installment.bankName || '';
+                   // Format into: "रू. 50,000/- चेक क्र. 501051 दि. 31/12/2020 बैंक SBI"
+                   text = `रू. ${amt}/- ${instType} क्र. ${instNum} दि. ${date} बैंक ${bank}`.trim();
+                 } else if (typeof installment === 'string') {
+                   text = installment;
+                 }
+                 
+                 if (idx === 0) newFills.paymentInstallment1 = text;
+                 if (idx === 1) newFills.paymentInstallment2 = text;
+                 if (idx === 2) newFills.paymentInstallment3 = text;
+                 if (idx === 3) newFills.paymentInstallment4 = text;
+                 if (idx === 4) newFills.paymentInstallment5 = text;
+               });
+             }
+           });
+        } else {
+           // For individual uploaded documents (vendorAadhaar, vendorPAN, motherDeed, khasra, layoutPlan, etc)
+           Object.entries(parsedJson).forEach(([key, val]) => {
+             if (val && typeof val === 'string' && val.trim() !== '') {
+               newFills[key] = val.trim();
+             }
+           });
+        }
+      } catch (e) {
+        console.error("Failed to parse Gemini JSON:", e, "Raw text:", text);
+      }
+
+      const finalFills = { ...newFills };
+
+      Object.keys(finalFills).forEach(key => {
+        keysToHighlight.push(key);
+      });
+
+      setData(prevData => ({ ...prevData, ...finalFills }));
+
+      setUploadState(prev => ({
+        ...prev,
+        [sectionId]: { ...prev[sectionId], status: "completed", progress: 100 }
+      }));
+
+      setHighlightedFields(prev => {
+        const next = new Set(prev);
+        keysToHighlight.forEach(k => next.add(k));
+        return next;
+      });
+
       setTimeout(() => {
-        setUploadState(prev => ({
-          ...prev,
-          [sectionId]: { ...prev[sectionId], status: "parsing", progress: 90 }
-        }));
+        setHighlightedFields(prev => {
+          const next = new Set(prev);
+          keysToHighlight.forEach(k => next.delete(k));
+          return next;
+        });
+      }, 2500);
 
-        setTimeout(() => {
-          setUploadState(prev => ({
-            ...prev,
-            [sectionId]: { ...prev[sectionId], status: "completed", progress: 100 }
-          }));
+    } catch (error: any) {
+      console.error("OCR Error:", error);
+      const errorMessage = error?.message || String(error);
+      
+      // Clear invalid key if authentication failed
+      if (errorMessage.toLowerCase().includes("api key not valid")) {
+        localStorage.removeItem("GEMINI_API_KEY");
+      }
 
-          const ocrData = SIMULATED_OCR_DATA[sectionId] || {};
-          const newFills: Record<string, string> = {};
-          const keysToHighlight: string[] = [];
-
-          Object.entries(ocrData).forEach(([key, val]) => {
-            if (effectiveDeed.fields.some(f => f.key === key)) {
-              newFills[key] = val;
-              keysToHighlight.push(key);
-            }
-          });
-
-          setData(prevData => ({ ...prevData, ...newFills }));
-
-          setHighlightedFields(prev => {
-            const next = new Set(prev);
-            keysToHighlight.forEach(k => next.add(k));
-            return next;
-          });
-
-          setTimeout(() => {
-            setHighlightedFields(prev => {
-              const next = new Set(prev);
-              keysToHighlight.forEach(k => next.delete(k));
-              return next;
-            });
-          }, 2500);
-
-        }, 800);
-      }, 800);
-    }, 800);
+      toast.error(`OCR Failed for ${sectionId}`, {
+        description: `Gemini API Error: ${errorMessage}`,
+      });
+      setUploadState(prev => ({
+        ...prev,
+        [sectionId]: { fileName: null, status: "idle", progress: 0 }
+      }));
+    }
   };
 
   const handleClear = (sectionId: string) => {
@@ -446,6 +646,7 @@ function DeedPage() {
     }));
   };
 
+  const hasAdvancedUploads = !!(effectiveDeed.documentUploads && effectiveDeed.documentUploads.length > 5);
   const isApartmentFlatDeed = effectiveDeed.slug === "sale-deed-apartment-flat";
 
   return (
@@ -598,16 +799,32 @@ function DeedPage() {
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1">
                   Auto-Fill via Document Upload
                 </span>
-                {isApartmentFlatDeed && (
-                  <p className="text-[11px] text-muted-foreground mb-3 flex items-start gap-1.5">
+                {hasAdvancedUploads ? (
+                  <p className="text-[11px] text-muted-foreground mb-4 flex items-start gap-1.5">
                     <Info className="h-3 w-3 mt-0.5 shrink-0 text-primary" />
-                    Upload all 9 documents below to auto-fill 100% of the deed fields via OCR scanning.
+                    {isApartmentFlatDeed
+                      ? "Upload your Master Registry to auto-fill the entire deed, or upload individual ID/Property documents."
+                      : "Upload your Master Registry or individual documents to auto-fill party and property details."
+                    }
                   </p>
-                )}
+                ) : null}
 
-                {/* Apartment/Flat: 9-document grid */}
-                {isApartmentFlatDeed && effectiveDeed.documentUploads ? (
-                  <div className="space-y-3">
+                {/* Apartment/Flat: 9-document grid + Master Registry */}
+                {hasAdvancedUploads && effectiveDeed.documentUploads ? (
+                  <div className="space-y-4">
+                    {/* Master Registry */}
+                    {effectiveDeed.documentUploads!.filter(d => d.id === "masterRegistry").map((doc) => (
+                      <div key={doc.id} className="mb-2">
+                        <DocUploadZone
+                          doc={doc}
+                          state={uploadState[doc.id]}
+                          onUpload={handleDocumentUpload}
+                          onClear={handleClear}
+                          disabled={isLocked}
+                        />
+                      </div>
+                    ))}
+
                     {/* Vendor documents */}
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-primary mb-2">Vendor (विक्रेता)</p>
@@ -617,7 +834,7 @@ function DeedPage() {
                             key={doc.id}
                             doc={doc}
                             state={uploadState[doc.id]}
-                            onUpload={handleSimulatedUpload}
+                            onUpload={handleDocumentUpload}
                             onClear={handleClear}
                             disabled={isLocked}
                           />
@@ -633,7 +850,7 @@ function DeedPage() {
                             key={doc.id}
                             doc={doc}
                             state={uploadState[doc.id]}
-                            onUpload={handleSimulatedUpload}
+                            onUpload={handleDocumentUpload}
                             onClear={handleClear}
                             disabled={isLocked}
                           />
@@ -644,12 +861,12 @@ function DeedPage() {
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-primary mb-2">Property & Payment Documents</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {effectiveDeed.documentUploads!.filter(d => !d.id.startsWith("vendor") && !d.id.startsWith("vendee")).map((doc) => (
+                        {effectiveDeed.documentUploads!.filter(d => !d.id.startsWith("vendor") && !d.id.startsWith("vendee") && d.id !== "masterRegistry").map((doc) => (
                           <DocUploadZone
                             key={doc.id}
                             doc={doc}
                             state={uploadState[doc.id]}
-                            onUpload={handleSimulatedUpload}
+                            onUpload={handleDocumentUpload}
                             onClear={handleClear}
                             disabled={isLocked}
                           />
@@ -664,7 +881,7 @@ function DeedPage() {
                       label="First Party ID"
                       id="firstParty"
                       state={uploadState.firstParty}
-                      onUpload={handleSimulatedUpload}
+                      onUpload={handleDocumentUpload}
                       onClear={handleClear}
                       disabled={isLocked}
                     />
@@ -672,7 +889,7 @@ function DeedPage() {
                       label="Second Party ID"
                       id="secondParty"
                       state={uploadState.secondParty}
-                      onUpload={handleSimulatedUpload}
+                      onUpload={handleDocumentUpload}
                       onClear={handleClear}
                       disabled={isLocked}
                     />
@@ -681,7 +898,7 @@ function DeedPage() {
                         label="Payment Proof"
                         id="payment"
                         state={uploadState.payment}
-                        onUpload={handleSimulatedUpload}
+                        onUpload={handleDocumentUpload}
                         onClear={handleClear}
                         disabled={isLocked}
                       />
